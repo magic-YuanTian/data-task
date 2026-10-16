@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+out/
+ui/.cache/
+*.part
+
+# downloaded or derived by scripts/fetch_sources.py and envs/nyc_bikeshare/ingest.py
+sources/nyc/trips/
+sources/nyc/trips_keyed.parquet
+sources/nyc/tmp/
+sources/nyc/raw/*-citibike-tripdata.zip
+sources/nyc/raw/tl_2019_us_zcta510.zip
+sources/nyc/raw_extra/

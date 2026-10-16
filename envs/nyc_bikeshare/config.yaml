@@ -1,0 +1,16 @@
+# NYC bike share: the real trip records of the New York City bike share system (July 2013 - December 2018), with NOAA
+# weather, Census ZIP code areas and NYC TLC taxi zones and pickups. Every table comes from a public source (build.py,
+# SOURCES). Sources are prepared by ingest.py and ingest_taxi.py (see sources/nyc/README.md).
+source:
+  trips: sources/nyc/trips                  # monthly parquet files written by ingest.py
+  raw: sources/nyc/raw
+  taxi: sources/nyc/taxi
+  spider_gold: third_party/spider2/spider2-lite/evaluation_suite/gold     # relative to the repository root
+  weather_stations:                         # GHCN-Daily id, GSOD usaf-wban, name
+    - [USW00094728, "725053-94728", "NY CITY CENTRAL PARK, NY US"]
+    - [USW00014732, "725030-14732", "LAGUARDIA AIRPORT, NY US"]
+    - [USW00094789, "744860-94789", "JFK INTERNATIONAL AIRPORT, NY US"]
+end: 2018-12-31                             # last day of the records
+rename_operator:                            # the data license does not allow the operator's marks in station names
+  old: Motivate
+  new: Harborline

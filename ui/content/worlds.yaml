@@ -1,0 +1,8 @@
+# Display text for each data environment. Order here is the order in the explorer.
+nyc_bikeshare:
+  title: NYC bike share
+  domain: Urban mobility
+  period: July 2013 to December 2018
+  source: Real NYC bike share trips 2013-2018 (the records of the Spider 2.0 table), NOAA weather, Census ZIP areas, NYC taxi zones and pickups
+  summary: Real bike share trips in New York City with NOAA weather, Census ZIP areas, taxi zones and daily taxi
+    pickups. Every table comes from a public source.

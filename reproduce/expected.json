@@ -1,0 +1,150 @@
+{
+ "nyc_bikeshare": {
+  "files": {
+   "catalog/data_dictionary.md": "821ad2f4ff1dd83ee41f7b84b64465982d25fdaf94ccb751e0e1165a078fbb04",
+   "catalog/documents.json": "3eb3a05718b93ffa22878e179f8ab8992dbdc78bad61201ed65435be27e39522",
+   "catalog/semantic_layer.yaml": "67bd964e189a44d1ccfdb68fb84ebc2c9fc9c917fe63c403cc1c3f1b4ed2561c",
+   "catalog/sources.json": "07501cb1a10ef7a185700d4b1b995fcb7bac7c0b9e7388a8ab47c8a14a4b5d76"
+  },
+  "tables": {
+   "ghcnd": [
+    49036,
+    "452465194859262794924970"
+   ],
+   "gsod": [
+    6573,
+    "60911529085092521473007"
+   ],
+   "holidays": [
+    60,
+    "542756392409093904318"
+   ],
+   "station_names": [
+    1018,
+    "9282968631311798914581"
+   ],
+   "stations": [
+    957,
+    "8990099084617916212328"
+   ],
+   "taxi_daily": [
+    753716,
+    "6953875159732759350739201"
+   ],
+   "taxi_zones": [
+    263,
+    "2506290687069291529771"
+   ],
+   "trips": [
+    70815021,
+    "653210285253293302668497733"
+   ],
+   "weather_stations": [
+    3,
+    "28625960220124445991"
+   ],
+   "zip_codes": [
+    409,
+    "3648442863515269670969"
+   ],
+   "zip_neighborhoods": [
+    185,
+    "1656210094298222828235"
+   ]
+  },
+  "tasks": {
+   "q1.birth_year_1969": [
+    "a1151d0a0d73ae3291b058b6f5398e270973d78d804c799896cd406b5d7f5fa1",
+    "a1151d0a0d73ae3291b058b6f5398e270973d78d804c799896cd406b5d7f5fa1"
+   ],
+   "q1.trip_records": [
+    "50505174826be4a868068540edb7665ec1ade24316644e1bf3754648e3a3dae9",
+    "50505174826be4a868068540edb7665ec1ade24316644e1bf3754648e3a3dae9"
+   ],
+   "q1.usertype": [
+    "96af55011465d054a72b7dfb5810244694ce238b33ae73fab89c6577fec4b15b",
+    "96af55011465d054a72b7dfb5810244694ce238b33ae73fab89c6577fec4b15b"
+   ],
+   "q1.weather_units": [
+    "baf9bc27a972e2e2235797ab11c658ee465a3069044ac8e57ada336dcfb78d43",
+    "baf9bc27a972e2e2235797ab11c658ee465a3069044ac8e57ada336dcfb78d43"
+   ],
+   "q2.daily_jan2016": [
+    "c8e8eb24203c3943d3a79604ed68e2073306a02427dc2caa54aeabe2e4070122",
+    "c8e8eb24203c3943d3a79604ed68e2073306a02427dc2caa54aeabe2e4070122"
+   ],
+   "q2.lost_bag": [
+    "b80cf80d37609648380c08d69fd97baaf462513d811b14d089b4efc8b460be5a",
+    "b80cf80d37609648380c08d69fd97baaf462513d811b14d089b4efc8b460be5a"
+   ],
+   "q2.monthly_trips": [
+    "b4b48b33c4651574da27212d1676205c602ddc7866cbf51acc2292fff32893a5",
+    "b4b48b33c4651574da27212d1676205c602ddc7866cbf51acc2292fff32893a5"
+   ],
+   "q2.spider_bq202": [
+    "7671f9e5e410e14de49426bc9cd2bfeae561713ae9704cd44cd62d7c8819a362",
+    "7671f9e5e410e14de49426bc9cd2bfeae561713ae9704cd44cd62d7c8819a362"
+   ],
+   "q2.spider_sf_bq358": [
+    "d80e38b308648420dbd3a6a0d0f8c4e7f73b2850d69fb97646bb2dc7c660a6b1",
+    "d80e38b308648420dbd3a6a0d0f8c4e7f73b2850d69fb97646bb2dc7c660a6b1"
+   ],
+   "q2.station_net_flow": [
+    "5c4e10ad310792b0942ae89d351dabf15f1de3c76afccb553af13e6ecc695288",
+    "5c4e10ad310792b0942ae89d351dabf15f1de3c76afccb553af13e6ecc695288"
+   ],
+   "q3.daily_profile": [
+    "363ae02c11599561d5c2f49b430470f5f36d90c2a2f13226bca62f7d95f1c235",
+    "363ae02c11599561d5c2f49b430470f5f36d90c2a2f13226bca62f7d95f1c235"
+   ],
+   "q3.duration_distribution": [
+    "4f2a8f1ce2a6809e01806b41b93920fe180c4ab7b684bdbedff8ff522d8e37e4",
+    "4f2a8f1ce2a6809e01806b41b93920fe180c4ab7b684bdbedff8ff522d8e37e4"
+   ],
+   "q3.growth_trend": [
+    "3bb0b436543aac13496c931550df9c95357a40025c2a0f0ecb579da6e7dfe0f8",
+    "3bb0b436543aac13496c931550df9c95357a40025c2a0f0ecb579da6e7dfe0f8"
+   ],
+   "q3.temperature": [
+    "a9bfe29f3f2fecf995fe791d899326df927ddafdf58958b81f2911b329a66c6c",
+    "a9bfe29f3f2fecf995fe791d899326df927ddafdf58958b81f2911b329a66c6c"
+   ],
+   "q4.birth_year_shift": [
+    "7da3934a917e6e09f2e49a32834138cec258f8c782ec12d61472007782cda89f",
+    "7da3934a917e6e09f2e49a32834138cec258f8c782ec12d61472007782cda89f"
+   ],
+   "q4.january_2016": [
+    "31c94b861b45d0681a2b1491489c59535f63704b31b177e04db20c0d9d528e23",
+    "31c94b861b45d0681a2b1491489c59535f63704b31b177e04db20c0d9d528e23"
+   ],
+   "q5.growth_2015": [
+    "aee8132cd5875d4b7697d3679cfa4bfb1eeb3322ef9dc821fcca235530faf25c",
+    "aee8132cd5875d4b7697d3679cfa4bfb1eeb3322ef9dc821fcca235530faf25c"
+   ],
+   "q5.ride_time_july_vs_march": [
+    "486d16990b8462728b1cff5fe23407c87e56a614e59b8630a1b7336ed39899c3",
+    "486d16990b8462728b1cff5fe23407c87e56a614e59b8630a1b7336ed39899c3"
+   ],
+   "q5.rider_age": [
+    "560f257979b81ec5808664286ae8ca8d3abbc75b9831cc87304327376b207056",
+    "560f257979b81ec5808664286ae8ca8d3abbc75b9831cc87304327376b207056"
+   ],
+   "q6.heat_wave": [
+    "6ae1b5cae7b52195dfcc9bffa8433c95f1f18ace8881796ecdcce37b1a135b80",
+    "6ae1b5cae7b52195dfcc9bffa8433c95f1f18ace8881796ecdcce37b1a135b80"
+   ],
+   "q6.june_trips": [
+    "0760cbea73c5291b8734a061b4420b1d072e9b0b0c6f0ee4a47e724704b846dd",
+    "0760cbea73c5291b8734a061b4420b1d072e9b0b0c6f0ee4a47e724704b846dd"
+   ],
+   "q7.new_station_zones": [
+    "3c18eaf4f10b1c29ef19eedd73232dcb13474b0a621f7b0a8186a21bf374c363",
+    "3c18eaf4f10b1c29ef19eedd73232dcb13474b0a621f7b0a8186a21bf374c363"
+   ],
+   "q7.rebalancing_plan": [
+    "eba09af7c383ac0f77d62ab2557e2c90b0208953894cba635e189df9f6f283cf",
+    "eba09af7c383ac0f77d62ab2557e2c90b0208953894cba635e189df9f6f283cf"
+   ]
+  }
+ }
+}

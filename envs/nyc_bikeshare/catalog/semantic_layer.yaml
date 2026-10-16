@@ -1,0 +1,39 @@
+# Certified metric definitions. Each SQL returns one row per month (columns: month, value).
+metrics:
+  trips:
+    description: Customer rides that started in the month, excluding rides to or from service stations.
+    sql: "SELECT date_trunc('month', starttime) AS month, count(*) AS value FROM trips\nWHERE NOT regexp_matches(lower(start_station_name\
+      \ || ' ' || end_station_name),\n  'depot|warehouse|workshop|prototype lab|qc station|ops 0|test|kiosk in a\
+      \ box|don''t use|8d mobile|facility')\nGROUP BY 1 ORDER BY 1\n"
+  member_trips:
+    description: Rides by members (usertype Subscriber).
+    sql: 'SELECT date_trunc(''month'', starttime) AS month, count(*) AS value FROM trips WHERE usertype = ''Subscriber''
+
+      GROUP BY 1 ORDER BY 1
+
+      '
+  pass_trips:
+    description: Rides by pass holders (usertype Customer).
+    sql: 'SELECT date_trunc(''month'', starttime) AS month, count(*) AS value FROM trips WHERE usertype = ''Customer''
+
+      GROUP BY 1 ORDER BY 1
+
+      '
+  avg_trip_minutes:
+    description: Mean ride time in minutes, rides of at most 3 hours.
+    sql: 'SELECT date_trunc(''month'', starttime) AS month, avg(tripduration) / 60 AS value FROM trips
+
+      WHERE tripduration <= 10800 GROUP BY 1 ORDER BY 1
+
+      '
+  active_stations:
+    description: Public stations with at least one departure in the month.
+    sql: "SELECT date_trunc('month', starttime) AS month, count(DISTINCT start_station_id) AS value FROM trips\n\
+      WHERE NOT regexp_matches(lower(start_station_name),\n  'depot|warehouse|workshop|prototype lab|qc station|ops\
+      \ 0|test|kiosk in a box|don''t use|8d mobile|facility')\nGROUP BY 1 ORDER BY 1\n"
+  active_bikes:
+    description: Bikes with at least one ride in the month.
+    sql: 'SELECT date_trunc(''month'', starttime) AS month, count(DISTINCT bikeid) AS value FROM trips GROUP BY
+      1 ORDER BY 1
+
+      '

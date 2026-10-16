@@ -1,0 +1,66 @@
+# Overview charts of each data environment.
+# chart: mark (line | area | bar | barh | dot | hist), x, y, color, size, height, xLabel, yLabel.
+nyc_bikeshare:
+  - id: daily_trips
+    title: Trips per day
+    sql: |
+      SELECT CAST(starttime AS DATE) AS day, count(*) AS trips
+      FROM trips GROUP BY 1 ORDER BY 1
+    chart: {mark: line, x: day, y: trips, xLabel: null, window: 7}
+    caption: Light line, trips per day. Dark line, centered 7-day mean.
+  - id: monthly_usertype
+    title: Trips per month by user type
+    unit: Subscriber = member, Customer = pass holder
+    sql: |
+      SELECT date_trunc('month', starttime)::DATE AS month, coalesce(usertype, 'unknown') AS user_type,
+        count(*) AS trips
+      FROM trips GROUP BY ALL ORDER BY 1, 2
+    chart: {mark: area, x: month, y: trips, color: user_type, xLabel: null}
+  - id: hourly
+    title: Trips by hour of the day, 2017
+    unit: average trips per day
+    sql: |
+      SELECT hour(starttime) AS hour,
+        CASE WHEN dayofweek(starttime) IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type,
+        count(*) / count(DISTINCT CAST(starttime AS DATE)) AS trips_per_day
+      FROM trips WHERE year(starttime) = 2017 GROUP BY ALL ORDER BY 2, 1
+    chart: {mark: line, x: hour, y: trips_per_day, color: day_type, yLabel: trips per day}
+  - id: temperature
+    title: Daily trips and maximum temperature, 2017
+    unit: Central Park, GHCN-Daily TMAX
+    sql: |
+      WITH d AS (SELECT CAST(starttime AS DATE) AS day, count(*) AS trips
+                 FROM trips WHERE year(starttime) = 2017 GROUP BY 1)
+      SELECT d.day, d.trips, g.value / 10.0 AS tmax_c,
+        CASE WHEN dayofweek(d.day) IN (0, 6) THEN 'weekend' ELSE 'weekday' END AS day_type
+      FROM d JOIN ghcnd g ON g.date = d.day AND g.element = 'TMAX' AND g.id = 'USW00094728'
+      ORDER BY 1
+    chart: {mark: dot, x: tmax_c, y: trips, color: day_type, xLabel: maximum temperature (°C)}
+  - id: duration
+    title: Ride time, 2017
+    unit: rides under one hour, by minute
+    sql: |
+      SELECT floor(tripduration / 60)::INT AS minutes, usertype AS user_type, count(*) AS trips
+      FROM trips WHERE year(starttime) = 2017 AND tripduration < 3600 AND usertype IS NOT NULL
+      GROUP BY ALL ORDER BY 2, 1
+    chart: {mark: line, x: minutes, y: trips, color: user_type, xLabel: ride time (minutes)}
+  - id: taxi
+    title: Taxi pickups per month
+    unit: NYC TLC yellow and green taxis
+    sql: |
+      SELECT date_trunc('month', date)::DATE AS month, service, sum(trips) AS pickups
+      FROM taxi_daily GROUP BY ALL ORDER BY 1, 2
+    chart: {mark: line, x: month, y: pickups, color: service, xLabel: null}
+  - id: station_map
+    type: map
+    title: Stations and their departures in 2017
+    layers: [taxi_zones]
+    sql: |
+      SELECT s.station_id, s.name, s.latitude AS lat, s.longitude AS lon, s.borough,
+        year(s.first_trip)::VARCHAR AS opened, count(*) AS trips_2017
+      FROM stations s
+      JOIN trips t ON t.start_station_id = s.station_id AND year(t.starttime) = 2017
+      WHERE s.latitude IS NOT NULL AND s.latitude > 40
+      GROUP BY ALL
+    chart: {lon: lon, lat: lat, r: trips_2017, color: borough, color_options: [borough, opened], title: name, height: 640}
+    caption: Dot size is the number of departures in 2017. Outlines are the TLC taxi zones.
