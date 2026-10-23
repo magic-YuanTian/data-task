@@ -63,7 +63,7 @@ the trips, builds the environment and its tasks, and compares the result with th
 .venv/bin/python ui/server.py              # http://127.0.0.1:8765
 ```
 
-A local web app with three parts: About (the levels and task types), Data (charts, map, tables with column profiles,
+A local web app with three parts: Taxonomy (the levels and task types), Data (tables with column profiles, charts, map,
 sources and documents, data dictionary, SQL) and Tasks (dependency graph, level filter, and for each task its
 reasoning path with editable queries, its target response and gold answer). See [ui/README.md](ui/README.md).
 

@@ -66,7 +66,7 @@ function Shell({ meta }) {
     case 'task': body = html`<${TaskPage} world=${w} id=${rest[1]} key=${w + rest[1]} />`; break;
     case 'data': body = html`<${DataPage} world=${w} query=${route.query} key=${w} />`; break;
     case 'sql': body = html`<${SqlPage} world=${w} query=${route.query} key=${w} />`; break;
-    default: body = html`<div class="page"><h1>Not found</h1><p><a href="#/">Back to About</a></p></div>`;
+    default: body = html`<div class="page"><h1>Not found</h1><p><a href="#/">Back to Taxonomy</a></p></div>`;
   }
   return html`<${AppContext.Provider} value=${app}>
     <div class="app no-side">
@@ -78,7 +78,7 @@ function Shell({ meta }) {
           ${tabItem('tasks', 'Tasks', href(['tasks', w]))}
         </nav>
         <span class="spacer"></span>
-        <nav class="top-tabs about-nav">${tabItem('about', 'About', '#/')}</nav>
+        <nav class="top-tabs about-nav">${tabItem('about', 'Taxonomy', '#/')}</nav>
       </header>
       <main class="main" id="main">${body}</main>
     </div>

@@ -133,7 +133,7 @@ export function DataPage({ world, query }) {
   const app = useApp();
   const seed = app.seed(world);
   const { data: wd, error } = useFetch(`/api/world/${world}?seed=${seed}`);
-  const tab = query.tab || 'charts';
+  const tab = query.tab || 'tables';
   const setTab = (t) => navigate(['data', world], { ...query, tab: t }, { replace: true });
   if (error) return html`<div class="page"><${ErrorBox} error=${error} /></div>`;
   if (!wd) return html`<${Loading} />`;
@@ -155,9 +155,9 @@ export function DataPage({ world, query }) {
       </div>
     </div>
     <div class="card" style="margin-bottom:16px"><${Tabs} active=${tab} onChange=${setTab} tabs=${[
+      { id: 'tables', label: 'Tables', count: tables.length },
       { id: 'charts', label: 'Charts', count: views.length + metricViews.length },
       maps.length && { id: 'map', label: 'Map' },
-      { id: 'tables', label: 'Tables', count: tables.length },
       { id: 'documents', label: 'Sources and documents' },
       { id: 'catalog', label: 'Data dictionary' },
       { id: 'query', label: 'Query' }]} /></div>

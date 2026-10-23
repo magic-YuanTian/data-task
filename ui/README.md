@@ -13,8 +13,8 @@ end loads vendored libraries from `static/vendor/` (Preact with htm, Observable 
 
 | Page | What it shows |
 |---|---|
-| About | the benchmark, the seven levels and 21 task types; clicking one explains it |
-| Data | an overview of the environment; charts, map, tables with column profiles, sources and documents, data dictionary and certified metrics, and a SQL workbench |
+| Taxonomy | the benchmark, the seven levels and 21 task types; clicking one explains it |
+| Data | an overview of the environment; tables with column profiles (the default tab), charts, map, sources and documents, data dictionary and certified metrics, and a SQL workbench |
 | Tasks | the tasks with a dependency graph and a level filter; a task shows its question, the tasks it builds on and is used by, the sources of its data, its reasoning path (each query is editable and runs in place), its target response and gold answer |
 
 The data environment is chosen in the top bar. A new environment needs no explorer code: build it into
