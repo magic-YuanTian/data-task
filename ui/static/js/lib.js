@@ -9,7 +9,20 @@ export const useApp = () => useContext(AppContext);
 // ---------- fetching ----------
 const cache = new Map();
 
+// The single-file copy made by ui/export_static.py carries the recorded responses instead of a server.
+const OFFLINE = window.DTB_OFFLINE;
+export const sqlKey = (world, sql) => world + '\n' + sql.trim().replace(/;\s*$/, '').replace(/\s+/g, ' ');
+
+function offline(path, method, body) {
+  let hit = method === 'POST' ? OFFLINE.sql[sqlKey(body.world, body.sql || '')] : OFFLINE.get[path.split('?')[0]];
+  if (typeof hit === 'string') hit = OFFLINE.sql[hit];      // the same query written differently
+  if (hit !== undefined) return Promise.resolve(hit);
+  const msg = method === 'POST' ? OFFLINE.sql_note : `not in this copy: ${path}`;
+  return Promise.reject(Object.assign(new Error(msg), { status: 404 }));
+}
+
 export async function api(path, { method = 'GET', body, fresh = false } = {}) {
+  if (OFFLINE) return offline(path, method, body);
   const key = method + ' ' + path;
   if (method === 'GET' && !fresh && cache.has(key)) return cache.get(key);
   const p = fetch(path, {

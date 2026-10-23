@@ -21,6 +21,11 @@ The data environment is chosen in the top bar. A new environment needs no explor
 `out/<env>/` (`world.duckdb`, `tasks.json`, `catalog/`), add it to `content/worlds.yaml` and, optionally, charts to
 `content/views.yaml`.
 
+`ui/export_static.py` writes the explorer as one HTML file (`docs/DataTaskBench.html`, about 3 MB) that opens in a
+browser without a server, for example as an email attachment. It holds every page, the first 100 rows of every table,
+and the results of every query shown on the pages; an edited or new query points to the live explorer (`--live-url`).
+It bundles the JavaScript with esbuild, which npx fetches on first use.
+
 ## Safety
 
 - Databases are opened read-only with file access disabled (`enable_external_access = false`, configuration

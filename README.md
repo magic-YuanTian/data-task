@@ -70,6 +70,10 @@ A local web app with three parts: Taxonomy (the levels and task types), Data (ta
 sources and documents, data dictionary, SQL) and Tasks (dependency graph, level filter, and for each task its
 reasoning path with editable queries, its target response and gold answer). See [ui/README.md](ui/README.md).
 
+[docs/DataTaskBench.html](docs/DataTaskBench.html) is the same explorer as one file (3 MB) that opens in a browser
+without a server: download it and open it. It holds the first 100 rows of every table and the results of the
+queries shown on its pages. `ui/export_static.py` rebuilds it.
+
 ## Layout
 
 ```
@@ -82,11 +86,12 @@ third_party/spider2/     Spider 2.0 gold results and documents used by the tasks
 scripts/                 reproduce.sh, fetch_sources.py, verify.py
 reproduce/expected.json  hashes of the published build
 ui/                      explorer web app
+docs/DataTaskBench.html  the explorer as one offline HTML file
 ```
 
 ## Licenses
 
 The code does not have an open-source license yet. The terms of the source data are in
 [DATA_SOURCES.md](DATA_SOURCES.md). The bike share trips may not be redistributed as a stand-alone dataset and the
-marketplace records are under CC BY-NC-SA 4.0, so this repository ships the scripts that download them. Spider 2.0 files are under the MIT license. The vendored front-end
+marketplace records are under CC BY-NC-SA 4.0, so this repository ships the scripts that download them; the offline explorer holds only the first 100 rows of each table. Spider 2.0 files are under the MIT license. The vendored front-end
 libraries keep their licenses in `ui/static/vendor/`.
