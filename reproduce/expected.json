@@ -1,4 +1,216 @@
 {
+ "br_ecommerce": {
+  "files": {
+   "catalog/data_dictionary.md": "da5c59238f64fa841ca54d627ae3af0ef2cfe27fbb3817d5bab24d30231a623b",
+   "catalog/documents.json": "25aa9647f63ebd20e2b23f81eae64f70ddbeea39378e92a166f33fe68387c3cc",
+   "catalog/semantic_layer.yaml": "fe0fb986e9cfc8cff1d0e28f2cde61e9e814023162e9dd89d694d07144b21acb",
+   "catalog/sources.json": "daef5d2e1435563a79c43e81fdd873f7e37c19a38a1f3286fdd1fb8a090a9809"
+  },
+  "tables": {
+   "calendar": [
+    60,
+    "547548256403609382053"
+   ],
+   "customers": [
+    99441,
+    "916267489156665446174140"
+   ],
+   "exchange_rates": [
+    750,
+    "6886498830782615084879"
+   ],
+   "geolocation": [
+    1000163,
+    "9236485076798957469723042"
+   ],
+   "ipca": [
+    36,
+    "373469835751036452342"
+   ],
+   "leads_closed": [
+    842,
+    "7609889126690443944612"
+   ],
+   "leads_qualified": [
+    8000,
+    "73676261819735026220853"
+   ],
+   "municipal_gdp": [
+    44545,
+    "409512051659159017647179"
+   ],
+   "municipalities": [
+    5572,
+    "51372395287666738456724"
+   ],
+   "order_items": [
+    112650,
+    "1039137305375292114952862"
+   ],
+   "order_payments": [
+    103886,
+    "957833991936594689076742"
+   ],
+   "order_reviews": [
+    99224,
+    "917761565942331092814690"
+   ],
+   "orders": [
+    99441,
+    "917504428039383248587471"
+   ],
+   "product_category_name_translation": [
+    71,
+    "602952279695560033293"
+   ],
+   "products": [
+    32951,
+    "305413696487187519927719"
+   ],
+   "sellers": [
+    3095,
+    "28750742371352203538728"
+   ],
+   "states": [
+    27,
+    "247342998451394522766"
+   ],
+   "zip_prefixes": [
+    19015,
+    "175132104061534524870725"
+   ]
+  },
+  "tasks": {
+   "q1.customer_ids": [
+    "dace2623dc1ce83c83b1393eb8625a81d1ac5fdf6de77e0d38acecb12f08d037",
+    "dace2623dc1ce83c83b1393eb8625a81d1ac5fdf6de77e0d38acecb12f08d037"
+   ],
+   "q1.review_survey": [
+    "a9fa51f5a9497df6a29f69a48a7190c1701fcf1ad59690e93e9fd2ecf9963b6c",
+    "a9fa51f5a9497df6a29f69a48a7190c1701fcf1ad59690e93e9fd2ecf9963b6c"
+   ],
+   "q1.rfm_document": [
+    "f1ae951aea0ffbbac48bf758f753791b2a2b7ed952a00346a704a7a353e25a25",
+    "f1ae951aea0ffbbac48bf758f753791b2a2b7ed952a00346a704a7a353e25a25"
+   ],
+   "q1.zip_prefix": [
+    "a966671cdbb20f57ae51d20e83f9ae14a33161545aedb2e85b7b04d774d43c56",
+    "a966671cdbb20f57ae51d20e83f9ae14a33161545aedb2e85b7b04d774d43c56"
+   ],
+   "q2.find_order": [
+    "5399220f5d418437e35f7f48bffe05cf52bd4b4452b8f0242e52f9186600af6e",
+    "5399220f5d418437e35f7f48bffe05cf52bd4b4452b8f0242e52f9186600af6e"
+   ],
+   "q2.funnel_period": [
+    "2ee6b5acc96507c2ab32fcac9241a91c076f5911118dc3d9f47d77f97f36c278",
+    "2ee6b5acc96507c2ab32fcac9241a91c076f5911118dc3d9f47d77f97f36c278"
+   ],
+   "q2.monthly_orders": [
+    "58c15d6e234d88f8def389925bc2026cfccaf980a16fbe853ca37a7147f50a62",
+    "84fd0688576681a030afe5c5f53bc37073f18789e96115a69c93f3e74486df0e"
+   ],
+   "q2.spider_local004": [
+    "f7356f176a80678886818664e7fe15d8d1e55e1f35bdda49ecb737b71646d45b",
+    "add24629c5011a49312cd6d674185793d27d230dcec6b979169d1cf29f47ccd3"
+   ],
+   "q2.spider_local028": [
+    "8a8f6aa706784e3d9c28c27fb5053e13d7dfdfda7bdfeb32b97a20944601dedc",
+    "8a8f6aa706784e3d9c28c27fb5053e13d7dfdfda7bdfeb32b97a20944601dedc"
+   ],
+   "q2.spider_local029": [
+    "bac48eb6bab64bcadeeb6afe49806a5ef40bba7fddcc97ea83e30d83814b5997",
+    "8a2758c3897fc6c30f1da6ee1e0beb6bc12c412a463892327fe444ccbc94bd1a"
+   ],
+   "q2.spider_local032": [
+    "fd1758a4bcf3714775ddc4ec30f1015517256a661a29b39407e84164395e5e21",
+    "dba6640c9e59786e295660f5a43d281f61b2818ae726707330e94f2254807eea"
+   ],
+   "q2.spider_local035": [
+    "d6e68c17212f9a1fb842e380bd0b17e53ef94c2f088cb9d04c1eac734a4888f8",
+    "7a599345abc5cd0c6ba8c819b336d85ad0196343a3406b58a0a02c36db3d24bf"
+   ],
+   "q2.spider_local037": [
+    "b78841a6cfab6a441ca9cf6abcd31ed7d62671272e562f1ed9a080462987e542",
+    "b78841a6cfab6a441ca9cf6abcd31ed7d62671272e562f1ed9a080462987e542"
+   ],
+   "q2.status_conflicts": [
+    "3623a9a73eb5d0173ab9c23bd10e44c149d6460ac96bdfeac5e41508b5829932",
+    "3623a9a73eb5d0173ab9c23bd10e44c149d6460ac96bdfeac5e41508b5829932"
+   ],
+   "q3.delay_and_reviews": [
+    "5cd86899848eaf714dec5209d12019444142ffd1743487b5d4a42942e0dd839e",
+    "5cd86899848eaf714dec5209d12019444142ffd1743487b5d4a42942e0dd839e"
+   ],
+   "q3.delivery_time": [
+    "30ad3542ff1a9a3c268bc6de89addec14911aa83ba47890cc8cadda275601e69",
+    "30ad3542ff1a9a3c268bc6de89addec14911aa83ba47890cc8cadda275601e69"
+   ],
+   "q3.order_growth": [
+    "87c9d3aeed185d64af7f4fa90765e6148064637a4e759e8eebc7fc1f656ca73e",
+    "87c9d3aeed185d64af7f4fa90765e6148064637a4e759e8eebc7fc1f656ca73e"
+   ],
+   "q3.weekly_cycle": [
+    "2b52b9c4d8178602623e88cc91049255f38d081c211126c8af3d529b20705f8f",
+    "2b52b9c4d8178602623e88cc91049255f38d081c211126c8af3d529b20705f8f"
+   ],
+   "q4.demand_and_income": [
+    "ad15d9692d7e359b3980990da88860ee7e669e49ff1e23e8f8b836c27ec09117",
+    "ad15d9692d7e359b3980990da88860ee7e669e49ff1e23e8f8b836c27ec09117"
+   ],
+   "q4.open_review": [
+    "56fcd277a4c7f25d90abbf38a3eae324725fbdbef4a0f93996bd93ede5448a4c",
+    "56fcd277a4c7f25d90abbf38a3eae324725fbdbef4a0f93996bd93ede5448a4c"
+   ],
+   "q4.promise_shift": [
+    "5adbe73863a66143e8cc048aeb3a44650f8cde78d57885c8f4acdb45cb817e8f",
+    "5adbe73863a66143e8cc048aeb3a44650f8cde78d57885c8f4acdb45cb817e8f"
+   ],
+   "q4.unusual_days": [
+    "4f1752d8e3d976c00f4ed03f6d6972eb8c38797bb2c0623f61a6686036126c99",
+    "4f1752d8e3d976c00f4ed03f6d6972eb8c38797bb2c0623f61a6686036126c99"
+   ],
+   "q5.geolocation_jump": [
+    "3768a40f08fadbea39210f10108354a872d95f6095cc4ca2024b3d2c383aa651",
+    "7b72b3ef2161a3359a3a271cbe605ca1a99abff1073c9f96f9ed678382efa5dd"
+   ],
+   "q5.late_spike_2018": [
+    "9d1409685ce02f7ec22dae30dedfaddcb5124693ab635b105b896ccbf066c7af",
+    "9d1409685ce02f7ec22dae30dedfaddcb5124693ab635b105b896ccbf066c7af"
+   ],
+   "q5.order_value_2018": [
+    "ada0b32c1a774ff7c26d0487a670afae9380a47e04fdd99afa5098644e75e914",
+    "5670e3a56544da72015585e97dd401263e74ad0af8e50488c0a534a74fb2d753"
+   ],
+   "q5.september_late": [
+    "efbd8791faf0e2b5d62962d00c8933a5ce7ff0a4e1b67b882c09bd2421349a01",
+    "efbd8791faf0e2b5d62962d00c8933a5ce7ff0a4e1b67b882c09bd2421349a01"
+   ],
+   "q5.strike_may_2018": [
+    "e684ed8ee2556cadccc8626c8d4ca6d5637b4fc030cbcbfac0704ec1e8aae6b0",
+    "e684ed8ee2556cadccc8626c8d4ca6d5637b4fc030cbcbfac0704ec1e8aae6b0"
+   ],
+   "q6.holidays_2018": [
+    "c5917518c4184eab8f1d8eb7b21ad346f2f0a05778630933269b38cfb6e40c0f",
+    "c5917518c4184eab8f1d8eb7b21ad346f2f0a05778630933269b38cfb6e40c0f"
+   ],
+   "q6.july_orders": [
+    "463e03c146ffa0a1d45b9f8c5c8f496b7baa33d119315b21acf681b6e665c354",
+    "463e03c146ffa0a1d45b9f8c5c8f496b7baa33d119315b21acf681b6e665c354"
+   ],
+   "q6.promise_whatif": [
+    "1d5c594be043837c4a5e88d63c633f97c0bf8f1086b95cda6e51eed89d6cf694",
+    "1d5c594be043837c4a5e88d63c633f97c0bf8f1086b95cda6e51eed89d6cf694"
+   ],
+   "q7.delivery_hubs": [
+    "ec6d9fc27699e7cb90e7c877b2f179b1ebf6122d6d5cc6bd6469b7faba2b07b1",
+    "ec6d9fc27699e7cb90e7c877b2f179b1ebf6122d6d5cc6bd6469b7faba2b07b1"
+   ],
+   "q7.lead_channels": [
+    "e624a57452fdd692f1c5435007c89d598f866e85a36747d425e3584e5238607b",
+    "e624a57452fdd692f1c5435007c89d598f866e85a36747d425e3584e5238607b"
+   ]
+  }
+ },
  "nyc_bikeshare": {
   "files": {
    "catalog/data_dictionary.md": "821ad2f4ff1dd83ee41f7b84b64465982d25fdaf94ccb751e0e1165a078fbb04",

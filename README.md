@@ -24,6 +24,7 @@ an existing benchmark (Spider 2.0); nothing is simulated and no record is plante
 | Environment | Data | Tasks |
 |---|---|---|
 | NYC bike share (`nyc_bikeshare`) | 70.8M real bike share trips in New York City, July 2013 to December 2018, with NOAA weather, Census ZIP areas, NYC taxi zones and daily taxi pickups | 23 |
+| Brazilian e-commerce (`br_ecommerce`) | 99,441 real orders of a Brazilian online marketplace, September 2016 to October 2018, with items, payments, reviews, sellers, 1M geolocation points and the marketing funnel; IBGE states, municipalities, population and municipal GDP; Banco Central exchange rates and inflation; holiday calendar | 32 |
 
 ## Tasks
 
@@ -35,7 +36,8 @@ an existing benchmark (Spider 2.0); nothing is simulated and no record is plante
 - the provenance of the data it uses;
 - a target response, the gold answer and how it is scored.
 
-Two tasks are Spider 2.0 tasks and are checked against the Spider gold results. Forecast tasks state the period they
+Eight tasks are Spider 2.0 tasks (two on the bike share trips, six on the marketplace) and are checked against the
+Spider gold results. Forecast tasks state the period they
 may use and are scored against the recorded values. A task that needs a planted event would be marked `planted`.
 
 ## Reproduce
@@ -46,15 +48,16 @@ scripts/reproduce.sh
 ```
 
 The script creates a Python 3.11 environment with the pinned packages (`requirements.txt`), downloads the source
-files that are not in the repository (bike share trips, Census ZIP areas; each checked against its SHA-256), converts
-the trips, builds the environment and its tasks, and compares the result with the published build
-(`reproduce/expected.json`: every table, the catalog and every task). It needs `curl`, a network connection and about
-10 GB of free disk. If `python3.11` is not on the path: `PYTHON=/path/to/python3.11 scripts/reproduce.sh`.
+files that are not in the repository (bike share trips, Census ZIP areas, the Spider 2.0-lite marketplace database,
+IBGE meshes and GDP; each checked against its SHA-256), converts the trips, builds the environments and their tasks,
+and compares the result with the published builds (`reproduce/expected.json`: every table, the catalog and every
+task). It needs `curl`, a network connection and about 16 GB of free disk; `--env br_ecommerce` builds one
+environment (about 1 GB). If `python3.11` is not on the path: `PYTHON=/path/to/python3.11 scripts/reproduce.sh`.
 
 ```
-.venv/bin/python -m envs.nyc_bikeshare.build    # out/nyc_bikeshare/world.duckdb and catalog/
-.venv/bin/python -m envs.nyc_bikeshare.tasks    # out/nyc_bikeshare/tasks.json
-.venv/bin/python scripts/verify.py              # compare with the published build
+.venv/bin/python -m envs.<env>.build            # out/<env>/world.duckdb and catalog/
+.venv/bin/python -m envs.<env>.tasks            # out/<env>/tasks.json
+.venv/bin/python scripts/verify.py              # compare with the published builds
 ```
 
 ## Explorer
@@ -70,10 +73,12 @@ reasoning path with editable queries, its target response and gold answer). See 
 ## Layout
 
 ```
-datataskbench/           levels and task types, statistics, anomaly scan, deterministic queries
+datataskbench/           levels and task types, statistics, anomaly scan, deterministic queries, task kit, Spider check
 envs/nyc_bikeshare/      config, ingest scripts, build (database and catalog), tasks, data dictionary
+envs/br_ecommerce/       config, build (database and catalog), tasks, data dictionary
 sources/nyc/             small source files and their provenance (README.md)
-third_party/spider2/     Spider 2.0 gold results used by two tasks (MIT license)
+sources/br_ecommerce/    small source files and their provenance (README.md)
+third_party/spider2/     Spider 2.0 gold results and documents used by the tasks (MIT license)
 scripts/                 reproduce.sh, fetch_sources.py, verify.py
 reproduce/expected.json  hashes of the published build
 ui/                      explorer web app
@@ -82,6 +87,6 @@ ui/                      explorer web app
 ## Licenses
 
 The code does not have an open-source license yet. The terms of the source data are in
-[DATA_SOURCES.md](DATA_SOURCES.md). The bike share trips may not be redistributed as a stand-alone dataset, so this
-repository ships the scripts that download them. Spider 2.0 files are under the MIT license. The vendored front-end
+[DATA_SOURCES.md](DATA_SOURCES.md). The bike share trips may not be redistributed as a stand-alone dataset and the
+marketplace records are under CC BY-NC-SA 4.0, so this repository ships the scripts that download them. Spider 2.0 files are under the MIT license. The vendored front-end
 libraries keep their licenses in `ui/static/vendor/`.

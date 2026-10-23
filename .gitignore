@@ -12,3 +12,8 @@ sources/nyc/tmp/
 sources/nyc/raw/*-citibike-tripdata.zip
 sources/nyc/raw/tl_2019_us_zcta510.zip
 sources/nyc/raw_extra/
+sources/br_ecommerce/raw/E_commerce.sqlite
+sources/br_ecommerce/raw/spider2_local_sqlite.zip
+sources/br_ecommerce/raw/br_municipios.zip
+sources/br_ecommerce/raw/br_unidades_da_federacao.zip
+sources/br_ecommerce/raw/base_de_dados_2010_2017_txt.zip

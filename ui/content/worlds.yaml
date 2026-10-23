@@ -6,3 +6,11 @@ nyc_bikeshare:
   source: Real NYC bike share trips 2013-2018 (the records of the Spider 2.0 table), NOAA weather, Census ZIP areas, NYC taxi zones and pickups
   summary: Real bike share trips in New York City with NOAA weather, Census ZIP areas, taxi zones and daily taxi
     pickups. Every table comes from a public source.
+br_ecommerce:
+  title: Brazilian e-commerce
+  domain: Online marketplace
+  period: September 2016 to October 2018
+  source: Real orders and marketing funnel of a Brazilian marketplace (the records of the Spider 2.0-lite E_commerce database), IBGE states, municipalities, population and GDP, Banco Central exchange rates and inflation, holiday calendar
+  summary: Real orders of a Brazilian online marketplace with items, payments, reviews, sellers and its marketing funnel,
+    joined with IBGE population, municipal GDP and maps, Banco Central rates and the holiday calendar. Every table comes
+    from a public source or from Spider 2.0.

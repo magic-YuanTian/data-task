@@ -333,6 +333,8 @@ class Store:
             "taxi_zones": "SELECT zone_id::VARCHAR AS id, zone || ' (' || borough || ')' AS name, borough AS grp, "
                           "ST_AsGeoJSON(ST_SimplifyPreserveTopology(ST_GeomFromText(zone_geom), 0.0004)) AS g "
                           "FROM taxi_zones",
+            "states": "SELECT uf AS id, name, region AS grp, ST_AsGeoJSON(ST_SimplifyPreserveTopology("
+                      "ST_GeomFromText(state_geom), 0.01)) AS g FROM states",
         }
         if layer not in layers:
             raise KeyError(layer)

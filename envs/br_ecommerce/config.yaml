@@ -1,0 +1,10 @@
+# Brazilian e-commerce: the public order records of a Brazilian marketplace (September 2016 - October 2018) and its
+# marketing funnel, as distributed with Spider 2.0-lite (E_commerce.sqlite), with IBGE states, municipalities,
+# population and municipal GDP, Banco Central exchange rates and inflation, and the national holiday calendar.
+# Every table comes from a public source or from Spider 2.0 (build.py, SOURCES); see sources/br_ecommerce/README.md.
+source:
+  raw: sources/br_ecommerce/raw
+  sqlite: sources/br_ecommerce/raw/E_commerce.sqlite        # extracted from the Spider 2.0-lite local database archive
+  spider_gold: third_party/spider2/spider2-lite/evaluation_suite/gold     # relative to the repository root
+  spider_docs: third_party/spider2/spider2-lite/resource/documents
+holiday_years: [2016, 2017, 2018]

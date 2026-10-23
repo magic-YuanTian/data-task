@@ -26,7 +26,7 @@ Source documents quoted by the tasks: the publisher's system data page (field de
 https://citibikenyc.com/system-data) and the NOAA GHCN-Daily readme
 (https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt).
 
-Spider 2.0 gold results used by two tasks are in `third_party/spider2` (MIT license).
+Spider 2.0 gold results used by two of these tasks are in `third_party/spider2` (MIT license).
 
 ### The trip data license
 
@@ -34,3 +34,30 @@ The license of Lyft Bikes and Scooters, LLC lets anyone use, modify and distribu
 lawful purpose. It does not allow publishing the data as a stand-alone dataset, except as source material in
 non-commercial analyses and studies, and it does not allow the CITI BIKE marks. This repository therefore ships the
 scripts that download the trips, not the trips.
+
+## Brazilian e-commerce (`br_ecommerce`)
+
+The marketplace tables are the order records and the marketing funnel of a Brazilian online marketplace, published
+on Kaggle as the Brazilian E-Commerce Public Dataset by Olist and the Marketing Funnel by Olist, and distributed with
+Spider 2.0-lite as the local database `E_commerce.sqlite`. All rows are kept as distributed: duplicate geolocation
+points, misspelled column names, a seller city that is an e-mail address and the other quirks are part of the data
+and several tasks are about them. Details are in [sources/br_ecommerce/README.md](sources/br_ecommerce/README.md).
+
+| Table | Source | Changes | Terms | In this repository |
+|---|---|---|---|---|
+| `orders`, `order_items`, `order_payments`, `order_reviews`, `customers`, `sellers`, `products`, `product_category_name_translation`, `geolocation` | Brazilian E-Commerce Public Dataset by Olist (Kaggle), via Spider 2.0-lite | text timestamps stored as TIMESTAMP | CC BY-NC-SA 4.0 | downloaded by the scripts |
+| `leads_qualified`, `leads_closed` | Marketing Funnel by Olist (Kaggle), via Spider 2.0-lite | text dates stored as DATE or TIMESTAMP | CC BY-NC-SA 4.0 | downloaded by the scripts |
+| `zip_prefixes` | derived from `geolocation`; municipality by spatial join with the IBGE 2018 municipal mesh | one row per ZIP code prefix | as its sources | derived |
+| `states`, `municipalities` | IBGE 2018 meshes (1:250,000) and population estimates of July 1, 2018 | areas computed on the ellipsoid; population footnotes kept | IBGE, free use with citation | estimates yes, meshes downloaded |
+| `municipal_gdp` | IBGE PIB dos Municípios 2010-2017 | fixed-width text split into columns | IBGE | downloaded by the scripts |
+| `exchange_rates`, `ipca` | Banco Central do Brasil, SGS series 1 (US dollar) and 433 (IPCA) | none | public data | yes |
+| `calendar` | Wikipedia, Public holidays in Brazil and Black Friday (shopping) | dates of 2016-2018 computed from the rules | CC BY-SA 4.0 (the pages) | the page extracts |
+
+Documents quoted by the tasks: the two Kaggle dataset descriptions, the Spider 2.0-lite documents RFM.md and
+spherical_law.md (in `third_party/spider2`), and the Wikipedia articles on the 2018 truck drivers' strike and on
+Black Friday. Six tasks are Spider 2.0-lite tasks (local004, local028, local029, local032, local035, local037) and are
+checked against the Spider gold results in `third_party/spider2`.
+
+The Kaggle datasets are under CC BY-NC-SA 4.0 (attribution, non-commercial use, share alike). This repository does
+not include the records; `scripts/fetch_sources.py` downloads them from the Spider 2.0-lite archive.
+

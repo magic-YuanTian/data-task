@@ -1,0 +1,47 @@
+# Certified metric definitions. Each SQL returns one row per month (columns: month, value).
+metrics:
+  orders:
+    description: Orders purchased in the month, all statuses.
+    sql: |
+      SELECT date_trunc('month', order_purchase_timestamp) AS month, count(*) AS value FROM orders
+      GROUP BY 1 ORDER BY 1
+  delivered_orders:
+    description: Orders purchased in the month that were delivered (status delivered).
+    sql: |
+      SELECT date_trunc('month', order_purchase_timestamp) AS month, count(*) AS value FROM orders
+      WHERE order_status = 'delivered' GROUP BY 1 ORDER BY 1
+  gmv:
+    description: Gross merchandise value, item prices plus freight, of the orders purchased in the month (R$).
+    sql: |
+      SELECT date_trunc('month', o.order_purchase_timestamp) AS month, sum(i.price + i.freight_value) AS value
+      FROM orders o JOIN order_items i USING (order_id) GROUP BY 1 ORDER BY 1
+  average_order_value:
+    description: Item prices plus freight per order, orders with items (R$).
+    sql: |
+      SELECT date_trunc('month', o.order_purchase_timestamp) AS month,
+        sum(i.price + i.freight_value) / count(DISTINCT o.order_id) AS value
+      FROM orders o JOIN order_items i USING (order_id) GROUP BY 1 ORDER BY 1
+  late_delivery_share:
+    description: Share of delivered orders purchased in the month that arrived after the promised day.
+    sql: |
+      SELECT date_trunc('month', order_purchase_timestamp) AS month,
+        avg((CAST(order_delivered_customer_date AS DATE) > CAST(order_estimated_delivery_date AS DATE))::INT) AS value
+      FROM orders WHERE order_status = 'delivered' AND order_delivered_customer_date IS NOT NULL
+      GROUP BY 1 ORDER BY 1
+  average_review_score:
+    description: Mean review score of the orders purchased in the month.
+    sql: |
+      SELECT date_trunc('month', o.order_purchase_timestamp) AS month, avg(r.review_score) AS value
+      FROM orders o JOIN order_reviews r USING (order_id) GROUP BY 1 ORDER BY 1
+  active_sellers:
+    description: Sellers with at least one item in an order purchased in the month.
+    sql: |
+      SELECT date_trunc('month', o.order_purchase_timestamp) AS month, count(DISTINCT i.seller_id) AS value
+      FROM orders o JOIN order_items i USING (order_id) GROUP BY 1 ORDER BY 1
+  new_customers:
+    description: People (customer_unique_id) whose first order was purchased in the month.
+    sql: |
+      SELECT date_trunc('month', first_order) AS month, count(*) AS value FROM (
+        SELECT c.customer_unique_id, min(o.order_purchase_timestamp) AS first_order
+        FROM orders o JOIN customers c USING (customer_id) GROUP BY 1)
+      GROUP BY 1 ORDER BY 1
