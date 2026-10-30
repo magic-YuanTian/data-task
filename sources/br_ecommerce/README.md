@@ -5,11 +5,11 @@ file are downloaded by `scripts/fetch_sources.py br_ecommerce` (with SHA-256 che
 
 | Kept here | Downloaded by the scripts |
 |---|---|
-| `raw/estimativa_dou_2018_20181019.ods`, `raw/bcb_*.json`, `raw/kaggle_*_metadata.json`, `raw/wikipedia_*.json` | `raw/E_commerce.sqlite` (from the Spider 2.0-lite archive), `raw/br_municipios.zip`, `raw/br_unidades_da_federacao.zip`, `raw/base_de_dados_2010_2017_txt.zip` |
+| `raw/estimativa_dou_2018_20181019.ods`, `raw/bcb_*.json`, `raw/kaggle_*_metadata.json`, `raw/wikipedia_*.json` | `raw/E_commerce.sqlite` (from the Spider 2.0 local database archive), `raw/br_municipios.zip`, `raw/br_unidades_da_federacao.zip`, `raw/base_de_dados_2010_2017_txt.zip` |
 
 | File | Source | Use | License or terms |
 |---|---|---|---|
-| `raw/E_commerce.sqlite` | Spider 2.0-lite local databases, archive linked from the spider2-lite README (Google Drive id `1coEVsCZq-Xvj9p2TnhBFoFTsY-UoYGmG`); only this file is extracted | orders, order_items, order_payments, order_reviews, customers, sellers, products, product_category_name_translation, geolocation, leads_qualified, leads_closed | the records are the Brazilian E-Commerce Public Dataset by Olist and the Marketing Funnel by Olist (Kaggle), CC BY-NC-SA 4.0; Spider 2.0 is MIT |
+| `raw/E_commerce.sqlite` | Spider 2.0 local databases, `sqlite.zip` of the Hugging Face dataset `xlangai/spider2-localdb` published by the Spider 2.0 authors (`https://huggingface.co/datasets/xlangai/spider2-localdb`); only this file is extracted. It is byte-identical (SHA-256 `49446afd…a81a`) to the copy in the archive linked from the spider2-lite README | orders, order_items, order_payments, order_reviews, customers, sellers, products, product_category_name_translation, geolocation, leads_qualified, leads_closed | the records are the Brazilian E-Commerce Public Dataset by Olist and the Marketing Funnel by Olist (Kaggle), CC BY-NC-SA 4.0; Spider 2.0 is MIT |
 | `raw/br_unidades_da_federacao.zip`, `raw/br_municipios.zip` | IBGE 2018 meshes at 1:250,000, `https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2018/Brasil/BR/` | states, municipalities, ZIP prefix to municipality | IBGE data, free use with citation of the source |
 | `raw/estimativa_dou_2018_20181019.ods` | IBGE population estimates of July 1, 2018 (published in the DOU on October 19, 2018), `https://ftp.ibge.gov.br/Estimativas_de_Populacao/Estimativas_2018/` | population of states and municipalities | IBGE |
 | `raw/base_de_dados_2010_2017_txt.zip` | IBGE PIB dos Municípios 2010-2017, `https://ftp.ibge.gov.br/Pib_Municipios/2017/base/` (fixed-width text; the layout file in the archive gives the fields) | municipal_gdp | IBGE |

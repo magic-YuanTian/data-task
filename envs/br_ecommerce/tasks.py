@@ -14,6 +14,7 @@ import itertools
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from datataskbench import stats as S
 from datataskbench.paths import repo_path
@@ -395,7 +396,7 @@ ORDER BY order_status, order_purchase_timestamp"""
 
 
 @task("q2.monthly_orders", "Q2.2",
-      "How many orders were purchased each month from January 2017 to August 2018, how many of them were delivered, and "
+      "How many orders were purchased each month from January 2017 to June 2018, how many of them were delivered, and "
       "what was their gross merchandise value (item prices plus freight)?",
       {"type": "table", "columns": ["month", "orders", "delivered", "gmv"]},
       scoring={"metric": "table_match", "compare_columns": [0, 1, 2, 3]})
@@ -403,18 +404,18 @@ def monthly_orders(e):
     sql = """SELECT date_trunc('month', o.order_purchase_timestamp)::DATE AS month, count(*) AS orders,
   count(*) FILTER (WHERE o.order_status = 'delivered') AS delivered, round(sum(i.value), 2) AS gmv
 FROM orders o LEFT JOIN (SELECT order_id, sum(price + freight_value) AS value FROM order_items GROUP BY 1) i USING (order_id)
-WHERE o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-09-01'
+WHERE o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-07-01'
 GROUP BY 1 ORDER BY 1"""
     sql0 = """SELECT date_trunc('month', order_purchase_timestamp)::DATE AS month, count(*) AS orders FROM orders
-WHERE order_purchase_timestamp < '2017-01-01' OR order_purchase_timestamp >= '2018-09-01' GROUP BY 1 ORDER BY 1"""
+WHERE order_purchase_timestamp < '2017-01-01' GROUP BY 1 ORDER BY 1"""
     a = e.q(sql)
-    steps = [step("Months outside the question have few records", sql=sql0, result=tab(e.q(sql0)),
-                  note="September 2016 to December 2016 and September to October 2018 are thin; November 2016 has no order."),
+    steps = [step("The months before 2017 have few records", sql=sql0, result=tab(e.q(sql0)),
+                  note="September 2016 to December 2016 are thin; November 2016 has no order."),
              step("Aggregate items to orders first, then count orders and sum value per purchase month", sql=sql, result=tab(a),
                   note="Joining items before counting would count an order once per item.")]
     gold = {"rows": tab(a)["rows"], "columns": list(a.columns)}
     pk = a.loc[a.orders.idxmax()]
-    resp = (f"{int(a.orders.sum()):,} orders in 20 months, from {int(a.orders.iloc[0]):,} in January 2017 to a peak of "
+    resp = (f"{int(a.orders.sum()):,} orders in {len(a)} months, from {int(a.orders.iloc[0]):,} in January 2017 to a peak of "
             f"{int(pk.orders):,} in {str(pk.month)[:7]}; GMV R$ {a.gmv.sum() / 1e6:.2f} million. Full table in the result.")
     return steps, gold, resp
 
@@ -446,7 +447,8 @@ WHERE order_id IN ({', '.join(repr(x) for x in cand.order_id)}) ORDER BY 1, 2"""
   i.price, i.freight_value, s.seller_city, s.seller_state
 FROM orders o JOIN order_items i USING (order_id) JOIN sellers s USING (seller_id) WHERE o.order_id = '{oid}'"""
     c = e.q(sql3).iloc[0]
-    steps = [step("Orders of customers in Picos (PI) purchased in March 2018, with their categories", sql=sql1, result=tab(a)),
+    steps = [step("Orders of customers in Picos (PI) purchased in March 2018, with their categories (each order has its "
+                  "own customer_id, which gives the customer's city)", sql=sql1, result=tab(a), uses="q1.customer_ids"),
              step("Payments of the garden tools orders: only one includes a voucher", sql=sql2, result=tab(b)),
              step("Promised and actual delivery, price and freight of that order", sql=sql3, result=tab(e.q(sql3)))]
     gold = {"order_id": oid, "promised": str(c.promised)[:10], "delivered": str(c.delivered)[:10], "days_late": int(c.days_late),
@@ -481,6 +483,100 @@ def funnel_period(e):
     return steps, gold, resp
 
 
+@task("q2.open_orders_july", "Q2.1",
+      "Which orders purchased in July 2018 were neither delivered nor canceled when the records end? List them with "
+      "their status, purchase date and the date they were handed to the carrier.",
+      {"type": "table", "columns": ["order_id", "order_status", "order_purchase_timestamp", "order_delivered_carrier_date"]},
+      scoring={"metric": "table_match", "compare_columns": [0, 1]})
+def open_orders_july(e):
+    sql0 = """SELECT order_status, count(*) AS orders FROM orders
+WHERE order_purchase_timestamp >= '2018-07-01' AND order_purchase_timestamp < '2018-08-01' GROUP BY 1 ORDER BY 2 DESC"""
+    sql = """SELECT order_id, order_status, order_purchase_timestamp, order_delivered_carrier_date FROM orders
+WHERE order_purchase_timestamp >= '2018-07-01' AND order_purchase_timestamp < '2018-08-01'
+  AND order_status NOT IN ('delivered', 'canceled')
+ORDER BY order_status, order_purchase_timestamp"""
+    a = e.q(sql)
+    n = a.order_status.value_counts()
+    shipped = a[a.order_status == "shipped"]
+    steps = [step("Statuses of the orders purchased in July 2018", sql=sql0, result=tab(e.q(sql0))),
+             step("Keep the orders that are neither delivered nor canceled", sql=sql, result=tab(a))]
+    gold = {"rows": tab(a)["rows"], "columns": list(a.columns)}
+    resp = (f"{len(a)} orders: " + ", ".join(f"{int(v)} {k}" for k, v in n.items()) + ". "
+            f"All {len(shipped)} shipped orders were handed to a carrier "
+            f"({int(shipped.order_delivered_carrier_date.notna().sum())} have a hand-over date) but have no delivery date; "
+            "the invoiced, processing and unavailable ones never left the seller. The list is in the result.")
+    return steps, gold, resp
+
+
+@task("q2.sao_paulo_points", "Q2.3",
+      "How many points of the geolocation table lie in the city of São Paulo, by the city name? Which spellings of the "
+      "name occur, and does the count agree with the municipality of each point's ZIP code prefix?",
+      {"type": "json", "schema": {"points": "int", "spellings": "list[str]"}}, depends_on=["q1.zip_prefix"],
+      scoring={"metric": "fields", "fields": {"points": {"exact": True}}})
+def sao_paulo_points(e):
+    sql = """SELECT geolocation_city, count(*) AS points FROM geolocation
+WHERE geolocation_state = 'SP' AND regexp_matches(geolocation_city, '^(s.{0,2}o ?paulo|sp)$')
+GROUP BY 1 ORDER BY 2 DESC"""
+    sql2 = """SELECT count(*) AS points_with_city_spelling,
+  count(*) FILTER (WHERE z.municipality_code = 3550308) AS of_them_in_municipality,
+  (SELECT count(*) FROM geolocation g2 JOIN zip_prefixes z2 ON z2.zip_code_prefix = g2.geolocation_zip_code_prefix
+   WHERE z2.municipality_code = 3550308) AS points_with_zip_in_municipality
+FROM geolocation g JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix
+WHERE g.geolocation_state = 'SP' AND regexp_matches(g.geolocation_city, '^(s.{0,2}o ?paulo|sp)$')"""
+    sql3 = "SELECT municipality_code, name, uf FROM municipalities WHERE municipality_code = 3550308"
+    a, b = e.q(sql), e.q(sql2).iloc[0]
+    gold = {"points": int(a.points.sum()), "spellings": list(a.geolocation_city)}
+    steps = [
+        step("The prefix stands for an area, and points are mapped to municipalities through it", uses="q1.zip_prefix"),
+        step("Find every spelling of the city name in the state of São Paulo (with and without the accent, "
+             "misencoded, abbreviated)", sql=sql, result=tab(a),
+             note="Matching only 'sao paulo' misses the accented and misspelled names."),
+        step("The municipality of São Paulo in the IBGE table", sql=sql3, result=tab(e.q(sql3))),
+        step("Compare with the municipality of the ZIP code prefix", sql=sql2, result=tab(e.q(sql2))),
+    ]
+    resp = (f"{gold['points']:,} points, under {len(a)} spellings: " + ", ".join(f"'{r.geolocation_city}' ({int(r.points):,})"
+            for r in a.itertuples()) + f". By ZIP code prefix, {int(b.points_with_zip_in_municipality):,} points fall in the "
+            f"municipality of São Paulo, and {int(b.of_them_in_municipality):,} of the points named São Paulo have a prefix "
+            "there: names and prefixes agree closely once every spelling is counted.")
+    return steps, gold, resp
+
+
+@task("q2.anonymized_names", "Q2.4",
+      "According to the dataset description, how were the names of companies and partners in the review texts "
+      "anonymized? How many reviews contain such a replaced name, and which names occur most?",
+      {"type": "json", "schema": {"reviews": "int", "names": "dict[str, int]"}}, depends_on=["q1.review_survey"],
+      scoring={"metric": "fields", "fields": {"reviews": {"exact": True}}})
+def anonymized_names(e):
+    houses = ["stark", "lannister", "targaryen", "baratheon", "tyrell", "martell", "greyjoy", "arryn", "tully"]
+    rx = "|".join(houses)
+    sql = f"""WITH r AS (SELECT review_id, lower(coalesce(review_comment_title, '') || ' ' || coalesce(review_comment_message, '')) AS txt
+           FROM order_reviews)
+SELECT h AS house, count(*) AS reviews FROM r, unnest(regexp_extract_all(txt, '\\b({rx})\\b')) AS t(h)
+GROUP BY 1 ORDER BY 2 DESC, 1"""
+    sql2 = f"""SELECT count(*) AS reviews_with_text,
+  count(*) FILTER (WHERE regexp_matches(lower(coalesce(review_comment_title, '') || ' ' || coalesce(review_comment_message, '')), '\\b({rx})\\b')) AS reviews_with_a_house
+FROM order_reviews WHERE review_comment_message IS NOT NULL OR review_comment_title IS NOT NULL"""
+    sql3 = f"""SELECT review_score, review_comment_message FROM order_reviews
+WHERE regexp_matches(lower(coalesce(review_comment_message, '')), '\\b({rx})\\b') ORDER BY review_creation_date LIMIT 5"""
+    a, b = e.q(sql), e.q(sql2).iloc[0]
+    gold = {"reviews": int(b.reviews_with_a_house), "names": {r.house: int(r.reviews) for r in a.itertuples()}}
+    steps = [
+        step("A review is the customer's answer to the satisfaction survey, with an optional title and text",
+             uses="q1.review_survey"),
+        step("Read how the description anonymized the data", doc=quote("dataset", 1)),
+        step("Search the review titles and texts for the great houses of Game of Thrones", sql=sql, result=tab(a)),
+        step("Count the reviews that contain at least one", sql=sql2, result=tab(e.q(sql2))),
+        step("Read some of them", sql=sql3, result=tab(e.q(sql3)),
+             note="The house stands where a store or the marketplace was named."),
+    ]
+    top = a.head(2)
+    resp = (f"The description says the data are anonymized and references to companies and partners in the review texts "
+            f"were replaced with the names of Game of Thrones great houses. {gold['reviews']:,} of the "
+            f"{int(b.reviews_with_text):,} reviews with text contain one; the most frequent are "
+            + " and ".join(f"{r.house.title()} ({int(r.reviews):,})" for r in top.itertuples()) + ".")
+    return steps, gold, resp
+
+
 # ====================================================================== Q3 Describe
 def monthly(e, start="2017-01-01", end="2018-08-01"):
     a = e.q("""SELECT date_trunc('month', order_purchase_timestamp)::DATE AS month, count(*) AS orders FROM orders GROUP BY 1""")
@@ -489,40 +585,40 @@ def monthly(e, start="2017-01-01", end="2018-08-01"):
 
 
 @task("q3.order_growth", "Q3.1",
-      "How did the number of orders develop from January 2017 to August 2018? Describe the trend, and say whether it "
+      "How did the number of orders develop from January 2017 to June 2018? Describe the trend, and say whether it "
       "continued in 2018.", TEXT, depends_on=["q2.monthly_orders"])
 def order_growth(e):
-    s = monthly(e)
+    s = monthly(e, end="2018-06-01")
     mk17 = S.mann_kendall(s["2017-01-01":"2017-12-01"].values)
-    mk18 = S.mann_kendall(s["2018-01-01":"2018-08-01"].values)
-    ja17, ja18 = s["2017-01-01":"2017-08-01"].sum(), s["2018-01-01":"2018-08-01"].sum()
+    mk18 = S.mann_kendall(s["2018-01-01":"2018-06-01"].values)
+    ja17, ja18 = s["2017-01-01":"2017-06-01"].sum(), s["2018-01-01":"2018-06-01"].sum()
     h1, h2 = s["2017-01-01":"2017-06-01"].mean(), s["2017-07-01":"2017-12-01"].mean()
     steps = [step("Monthly orders", uses="q2.monthly_orders",
-                  result={"jan_2017": int(s.iloc[0]), "nov_2017": int(s["2017-11-01"]), "aug_2018": int(s.iloc[-1])}),
+                  result={"jan_2017": int(s.iloc[0]), "nov_2017": int(s["2017-11-01"]), "jun_2018": int(s.iloc[-1])}),
              step("Trend test within each year (Mann-Kendall)", source="calculation",
                   result={"tau_2017": round(mk17["tau"], 3), "p_2017": float(f"{mk17['p']:.2g}"),
                           "tau_2018": round(mk18["tau"], 3), "p_2018": float(f"{mk18['p']:.2g}")}),
-             step("Compare January-August 2018 with January-August 2017", source="calculation",
-                  result={"jan_aug_2017": int(ja17), "jan_aug_2018": int(ja18), "growth": round(ja18 / ja17 - 1, 3)})]
+             step("Compare January-June 2018 with January-June 2017", source="calculation",
+                  result={"jan_jun_2017": int(ja17), "jan_jun_2018": int(ja18), "growth": round(ja18 / ja17 - 1, 3)})]
     gold = {"key_facts": [
         f"Orders grew fast through 2017, from {int(s.iloc[0]):,} in January to about {int(h2):,} a month in the second half "
         f"(Mann-Kendall tau {mk17['tau']:.2f}, p {mk17['p']:.1g}).",
         f"November 2017 is a peak ({int(s['2017-11-01']):,} orders) driven by Black Friday.",
-        f"In 2018 growth stopped: {int(s['2018-01-01':'2018-08-01'].min()):,}-{int(s['2018-01-01':'2018-08-01'].max()):,} orders a "
-        f"month with no upward trend (tau {mk18['tau']:.2f}, p {mk18['p']:.2f}), slightly falling after May.",
-        f"January-August 2018 had {(ja18 / ja17 - 1) * 100:.0f}% more orders than January-August 2017 because 2018 kept the level "
+        f"In 2018 growth stopped: {int(s['2018-01-01':'2018-06-01'].min()):,}-{int(s['2018-01-01':'2018-06-01'].max()):,} orders a "
+        f"month with no upward trend (tau {mk18['tau']:.2f}, p {mk18['p']:.2f}).",
+        f"January-June 2018 had {(ja18 / ja17 - 1) * 100:.0f}% more orders than January-June 2017 because 2018 kept the level "
         "reached at the end of 2017."],
         "required": [0, 2]}
     resp = (f"Orders rose steadily through 2017, from {int(s.iloc[0]):,} in January to about {int(h2):,} a month in the second half, "
             f"with a Black Friday peak of {int(s['2017-11-01']):,} in November. From January 2018 the level is flat at "
-            f"{int(s['2018-01-01':'2018-08-01'].min()):,}-{int(s['2018-01-01':'2018-08-01'].max()):,} a month (no trend, tau "
-            f"{mk18['tau']:.2f}) and eases after May. January-August 2018 is still {(ja18 / ja17 - 1) * 100:.0f}% above the same months of 2017.")
+            f"{int(s['2018-01-01':'2018-06-01'].min()):,}-{int(s['2018-01-01':'2018-06-01'].max()):,} a month (no trend, tau "
+            f"{mk18['tau']:.2f}). January-June 2018 is still {(ja18 / ja17 - 1) * 100:.0f}% above the same months of 2017.")
     return steps, gold, resp
 
 
 @task("q3.weekly_cycle", "Q3.2",
       "Describe the weekly and daily cycle of purchases (January 2017 to August 2018): which weekdays and hours are busiest?",
-      TEXT)
+      TEXT, depends_on=["q2.monthly_orders"])
 def weekly_cycle(e):
     sql1 = """SELECT dayofweek(order_purchase_timestamp) AS dow, dayname(order_purchase_timestamp) AS weekday, count(*) AS orders
 FROM orders WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_timestamp < '2018-09-01' GROUP BY 1, 2 ORDER BY 1"""
@@ -533,7 +629,8 @@ FROM orders WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_ti
     top, low = a.loc[a.orders.idxmax()], a.loc[a.orders.idxmin()]
     day = b[(b.hour >= 10) & (b.hour <= 22)].pct.sum()
     night = b[(b.hour >= 2) & (b.hour <= 6)].pct.sum()
-    steps = [step("Orders by weekday", sql=sql1, result=tab(a)), step("Orders by hour of the day", sql=sql2, result=tab(b))]
+    steps = [step("Start in January 2017: the months before have few orders", uses="q2.monthly_orders"),
+             step("Orders by weekday", sql=sql1, result=tab(a)), step("Orders by hour of the day", sql=sql2, result=tab(b))]
     gold = {"key_facts": [
         f"{top.weekday} is the busiest weekday ({int(top.orders):,} orders) and {low.weekday} the quietest ({int(low.orders):,}, "
         f"{low.orders / top.orders * 100:.0f}% of {top.weekday}); orders decline from Monday to Saturday.",
@@ -547,7 +644,7 @@ FROM orders WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_ti
 
 @task("q3.delivery_time", "Q3.3",
       "Describe the distribution of delivery times (purchase to delivery, delivered orders): typical value, spread, tail, "
-      "and differences between regions.", TEXT)
+      "and differences between regions.", TEXT, depends_on=["q2.status_conflicts"])
 def delivery_time(e):
     sql1 = f"""SELECT count(*) AS orders, round(avg(d), 1) AS mean_days, round(quantile_cont(d, 0.5), 1) AS median_days,
   round(quantile_cont(d, 0.9), 1) AS p90_days, round(quantile_cont(d, 0.99), 1) AS p99_days, round(max(d), 1) AS max_days,
@@ -563,7 +660,9 @@ WHERE o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NU
 FROM orders WHERE {DELIVERED} AND order_delivered_carrier_date IS NOT NULL"""
     a, b, c = e.q(sql1).iloc[0], e.q(sql2), e.q(sql3).iloc[0]
     fast, slow = b.iloc[0], b.iloc[-1]
-    steps = [step("Summary of delivery times", sql=sql1, result=tab(e.q(sql1))),
+    steps = [step("Delivered orders with a delivery date only: some orders marked delivered have none",
+                  uses="q2.status_conflicts"),
+             step("Summary of delivery times", sql=sql1, result=tab(e.q(sql1))),
              step("By region of the customer", sql=sql2, result=tab(b)),
              step("The two legs: seller to carrier, carrier to customer", sql=sql3, result=tab(e.q(sql3)))]
     gold = {"key_facts": [
@@ -614,11 +713,236 @@ GROUP BY 1 ORDER BY 1"""
     return steps, gold, resp
 
 
+@task("q3.payment_mix", "Q3.1",
+      "How did the mix of payment methods develop from 2017 to August 2018? Describe the trend of each method's share "
+      "of orders.", TEXT, depends_on=["q2.monthly_orders"])
+def payment_mix(e):
+    sql = """SELECT date_trunc('quarter', o.order_purchase_timestamp)::DATE AS quarter, count(*) AS orders,
+  round(avg((p.payment_type = 'credit_card')::INT) * 100, 2) AS pct_credit_card,
+  round(avg((p.payment_type = 'boleto')::INT) * 100, 2) AS pct_boleto,
+  round(avg((p.payment_type = 'debit_card')::INT) * 100, 2) AS pct_debit_card,
+  round(avg((p.payment_type = 'voucher')::INT) * 100, 2) AS pct_voucher
+FROM orders o JOIN order_payments p USING (order_id)
+WHERE p.payment_sequential = 1 AND o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-09-01'
+GROUP BY 1 ORDER BY 1"""
+    sql_m = """SELECT date_trunc('month', o.order_purchase_timestamp)::DATE AS month, p.payment_type, count(*) AS orders
+FROM orders o JOIN order_payments p USING (order_id)
+WHERE p.payment_sequential = 1 AND o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-09-01'
+GROUP BY 1, 2 ORDER BY 1, 2"""
+    a = e.q(sql)
+    m = e.q(sql_m).pivot(index="month", columns="payment_type", values="orders").fillna(0)
+    sh = m.div(m.sum(axis=1), axis=0)
+    mk = {k: S.mann_kendall(sh[k].values) for k in ("credit_card", "boleto", "debit_card", "voucher")}
+    f, l = a.iloc[0], a.iloc[-1]
+    steps = [
+        step("Orders per month are the base", uses="q2.monthly_orders"),
+        step("Share of orders by the method of their first payment, per quarter", sql=sql, result=tab(a),
+             note="The third quarter of 2018 has July and August only."),
+        step("Mann-Kendall test on each method's monthly share", sql=sql_m, source="calculation",
+             result={k: {"tau": round(v["tau"], 3), "p_value": float(f"{v['p']:.2g}")} for k, v in mk.items()}),
+    ]
+    gold = {"key_facts": [
+        f"Credit card dominates throughout ({f.pct_credit_card:.0f}% of orders in early 2017, {l.pct_credit_card:.0f}% in "
+        "mid 2018).",
+        f"Debit card is small but rising steadily: from {f.pct_debit_card:.1f}% to {l.pct_debit_card:.1f}% of orders "
+        f"(Mann-Kendall tau {mk['debit_card']['tau']:.2f}).",
+        f"Boleto (bank slip) loses share, from {f.pct_boleto:.1f}% to {l.pct_boleto:.1f}% (tau {mk['boleto']['tau']:.2f}); "
+        f"vouchers stay small ({l.pct_voucher:.1f}% in mid 2018)."], "required": [0, 1, 2]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q3.month_cycle", "Q3.2",
+      "Is there a monthly cycle in purchases, for example more orders at the start of the month, after paydays? Use the "
+      "orders of January 2017 to August 2018.", TEXT, depends_on=["q3.weekly_cycle", "q2.monthly_orders"],
+      control="null")
+def month_cycle(e):
+    sql = """WITH d AS (SELECT CAST(order_purchase_timestamp AS DATE) AS day, count(*) AS orders FROM orders
+           WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_timestamp < '2018-09-01' GROUP BY 1),
+     m AS (SELECT day, orders, orders / avg(orders) OVER (PARTITION BY date_trunc('month', day)) AS rel FROM d
+           WHERE day NOT IN (DATE '2017-11-24', DATE '2017-11-25'))
+SELECT day(day) AS day_of_month, count(*) AS months, round(sum(orders) / count(*)) AS orders_per_occurrence,
+  round(avg(rel), 3) AS relative_to_month_mean
+FROM m GROUP BY 1 ORDER BY 1"""
+    a = e.q(sql)
+    raw = e.q("""SELECT day(order_purchase_timestamp) AS day_of_month, count(*) AS orders FROM orders
+WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_timestamp < '2018-09-01' GROUP BY 1 ORDER BY 1""")
+    part = pd.cut(a.day_of_month, [0, 10, 20, 31], labels=["1-10", "11-20", "21-31"])
+    thirds = a.groupby(part, observed=True).relative_to_month_mean.mean().round(3)
+    steps = [
+        step("Weekdays differ, so each day is compared with the mean day of its own month", uses="q3.weekly_cycle"),
+        step("Raw counts by day of the month: the 29th to 31st occur in fewer months and the 24th holds Black Friday",
+             sql="""SELECT day(order_purchase_timestamp) AS day_of_month, count(*) AS orders FROM orders
+WHERE order_purchase_timestamp >= '2017-01-01' AND order_purchase_timestamp < '2018-09-01' GROUP BY 1 ORDER BY 1""",
+             result=tab(raw)),
+        step("Months differ greatly in size (orders grew through 2017), so compare each day with its own month",
+             uses="q2.monthly_orders"),
+        step("Remove Black Friday (November 24-25, 2017, in the calendar) and compare each day with its month's mean",
+             sql=sql, result=tab(a)),
+        step("Average by third of the month", source="calculation", result=thirds.to_dict()),
+    ]
+    gold = {"key_facts": [
+        "No: there is no clear monthly cycle. Each third of the month is within a few percent of the month's mean "
+        f"(days 1-10: {thirds['1-10']:.2f}, 11-20: {thirds['11-20']:.2f}, 21-31: {thirds['21-31']:.2f}).",
+        "The low raw counts on the 29th to 31st come from the calendar (they occur in fewer months), and the peak on "
+        "the 24th is Black Friday 2017.",
+        f"Day-to-day differences in the relative level stay small (from {a.relative_to_month_mean.min():.2f} to "
+        f"{a.relative_to_month_mean.max():.2f})."], "required": [0, 1]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q3.order_value", "Q3.3",
+      "Describe the distribution of order values (item prices plus freight) of delivered orders: typical value, spread, "
+      "tail, and how it depends on the number of items.", TEXT, depends_on=["q1.customer_ids"])
+def order_value(e):
+    sql = f"""WITH v AS (SELECT o.order_id, count(*) AS items, sum(i.price + i.freight_value) AS value
+           FROM orders o JOIN order_items i USING (order_id) WHERE o.{DELIVERED} GROUP BY 1)
+SELECT CASE WHEN items >= 3 THEN '3+' ELSE items::VARCHAR END AS items, count(*) AS orders,
+  round(quantile_cont(value, 0.1), 2) AS p10, round(median(value), 2) AS median, round(avg(value), 2) AS mean,
+  round(quantile_cont(value, 0.9), 2) AS p90, round(quantile_cont(value, 0.99), 2) AS p99, round(max(value), 2) AS max
+FROM v GROUP BY GROUPING SETS ((1), ()) ORDER BY 1 NULLS LAST"""
+    a = e.q(sql)
+    a["items"] = a["items"].fillna("all")
+    v = e.q(f"""SELECT sum(i.price + i.freight_value) AS value FROM orders o JOIN order_items i USING (order_id)
+WHERE o.{DELIVERED} GROUP BY o.order_id""").value
+    sk, lsk = float(stats.skew(v)), float(stats.skew(np.log(v)))
+    top = float(v.sort_values(ascending=False).head(int(len(v) * 0.01)).sum() / v.sum() * 100)
+    al = a.set_index("items")
+    steps = [
+        step("One order can have several items (and sellers): sum the items of each order", uses="q1.customer_ids"),
+        step("Quantiles of the order value by number of items", sql=sql, result=tab(a)),
+        step("Shape: skewness of the value and of its logarithm, and the share of the top 1% of orders",
+             source="calculation", result={"skewness": round(sk, 2), "skewness_of_log": round(lsk, 2),
+                                           "top_1pct_share_of_value_pct": round(top, 1)}),
+    ]
+    gold = {"key_facts": [
+        f"Order values are strongly right-skewed: median R$ {al['median']['all']:.0f}, mean R$ {al['mean']['all']:.0f}; "
+        f"10% are below R$ {al.p10['all']:.0f} and 10% above R$ {al.p90['all']:.0f}, with a long tail to "
+        f"R$ {al['max']['all']:,.0f}.",
+        f"On a log scale the distribution is roughly symmetric (skewness {lsk:.2f} against {sk:.1f}): close to log-normal; "
+        f"the top 1% of orders make {top:.0f}% of the value.",
+        f"Most orders have one item ({int(al.orders['1']):,} of {int(al.orders['all']):,}); orders with more items are "
+        f"worth more (median R$ {al['median']['1']:.0f} for one item, R$ {al['median']['2']:.0f} for two, "
+        f"R$ {al['median']['3+']:.0f} for three or more)."], "required": [0, 2]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q3.installments", "Q3.4",
+      "For orders paid by credit card, how is the number of installments related to the order value? Do customers "
+      "split cheap purchases too?", TEXT, depends_on=["q3.order_value", "q2.spider_local037"])
+def installments(e):
+    sql = """SELECT CASE WHEN payment_installments >= 10 THEN '10+' ELSE lpad(payment_installments::VARCHAR, 2, '0') END AS installments,
+  count(*) AS payments, round(median(payment_value), 2) AS median_value, round(median(payment_value / payment_installments), 2) AS median_per_installment
+FROM order_payments WHERE payment_type = 'credit_card' AND payment_installments >= 1 GROUP BY 1 ORDER BY 1"""
+    sql2 = """SELECT CASE WHEN payment_value < 50 THEN 'a: under 50' WHEN payment_value < 100 THEN 'b: 50-100'
+  WHEN payment_value < 200 THEN 'c: 100-200' WHEN payment_value < 500 THEN 'd: 200-500' ELSE 'e: 500+' END AS value_band,
+  count(*) AS payments, round(avg(payment_installments), 2) AS avg_installments,
+  round(avg((payment_installments = 1)::INT) * 100, 1) AS pct_single
+FROM order_payments WHERE payment_type = 'credit_card' AND payment_installments >= 1 GROUP BY 1 ORDER BY 1"""
+    r = e.q("SELECT payment_value, payment_installments FROM order_payments WHERE payment_type = 'credit_card' AND payment_installments >= 1")
+    rho = float(stats.spearmanr(r.payment_value, r.payment_installments).correlation)
+    a, b = e.q(sql), e.q(sql2).set_index("value_band")
+    steps = [
+        step("Credit card is the most used payment type, also in the largest categories", uses="q2.spider_local037"),
+        step("Order values are right-skewed; compare medians and bands", uses="q3.order_value"),
+        step("Median value by number of installments", sql=sql, result=tab(a)),
+        step("Installments by value band", sql=sql2, result=tab(b.reset_index())),
+        step("Rank correlation of value and installments", source="calculation", result={"spearman": round(rho, 3), "payments": len(r)}),
+    ]
+    gold = {"key_facts": [
+        f"Larger purchases are split into more installments (Spearman {rho:.2f}): payments under R$ 50 average "
+        f"{b.avg_installments['a: under 50']:.1f} installments, payments of R$ 500 and more "
+        f"{b.avg_installments['e: 500+']:.1f}.",
+        f"Customers split cheap purchases too: only {b.pct_single['a: under 50']:.0f}% of card payments under R$ 50 are "
+        "paid at once.",
+        f"The installment itself stays small: the median installment is around R$ "
+        f"{a.median_per_installment.iloc[2]:.0f}-{a.median_per_installment.iloc[0]:.0f} for 1-3 installments and lower "
+        "for more."], "required": [0, 1]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+PREFIX_KM = ("6371 * 2 * asin(sqrt(power(sin(radians(g.geolocation_lat - z.lat) / 2), 2) + cos(radians(g.geolocation_lat)) "
+             "* cos(radians(z.lat)) * power(sin(radians(g.geolocation_lng - z.lon) / 2), 2)))")
+
+
+@task("q3.zip_points", "Q3.3",
+      "How spread out are the geolocation points of one ZIP code prefix? Describe the distribution of the number of "
+      "points per prefix and of the distance between each point and the median point of its prefix, and how the "
+      "distance differs between the city of São Paulo and the rest of the country.", TEXT,
+      depends_on=["q1.zip_prefix", "q2.sao_paulo_points"])
+def zip_points(e):
+    sql1 = """SELECT count(*) AS prefixes, quantile_cont(n_points, 0.1) AS p10, median(n_points) AS median,
+  quantile_cont(n_points, 0.9) AS p90, max(n_points) AS max, count(*) FILTER (WHERE n_points = 1) AS with_one_point
+FROM zip_prefixes"""
+    sql2 = f"""WITH d AS (SELECT {PREFIX_KM} AS km, coalesce(z.municipality_code = 3550308, false) AS sao_paulo
+           FROM geolocation g JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix)
+SELECT CASE WHEN GROUPING(sao_paulo) = 1 THEN 'all' WHEN sao_paulo THEN 'city of São Paulo' ELSE 'rest of Brazil' END AS area, count(*) AS points,
+  round(median(km), 2) AS median_km, round(quantile_cont(km, 0.9), 2) AS p90_km, round(quantile_cont(km, 0.99), 1) AS p99_km,
+  round(quantile_cont(km, 0.999), 1) AS p999_km, round(max(km)) AS max_km
+FROM d GROUP BY GROUPING SETS ((sao_paulo), ()) ORDER BY 1"""
+    a, b = e.q(sql1).iloc[0], e.q(sql2).set_index("area")
+    steps = [
+        step("A prefix is an area that holds many points; zip_prefixes gives each prefix its median point and its "
+             "municipality", uses="q1.zip_prefix"),
+        step("The city of São Paulo is municipality 3550308; its points are matched through the prefix, whatever the "
+             "spelling of the city name", uses="q2.sao_paulo_points"),
+        step("Points per prefix", sql=sql1, result=tab(e.q(sql1))),
+        step("Distance from each point to the median point of its prefix (great circle), for the city of São Paulo and "
+             "the rest", sql=sql2, result=tab(b.reset_index())),
+    ]
+    al, sp, rest = b.loc["all"], b.loc["city of São Paulo"], b.loc["rest of Brazil"]
+    gold = {"key_facts": [
+        f"{int(a.prefixes):,} prefixes hold a median of {a['median']:.0f} points each (10% have {a.p10:.0f} or fewer, "
+        f"10% {a.p90:.0f} or more, up to {int(a['max']):,}); {int(a.with_one_point):,} have a single point.",
+        f"Points lie close to their prefix's median point: median {al.median_km} km, 90% within {al.p90_km} km and 99% "
+        f"within {al.p99_km} km.",
+        f"The tail is extreme: 0.1% of points are more than {al.p999_km:,.0f} km away and the farthest "
+        f"{al.max_km:,.0f} km, far more than any prefix area: these are errors, not spread.",
+        f"Prefixes are much tighter in the city of São Paulo (median {sp.median_km} km, 99% within {sp.p99_km} km) "
+        f"than elsewhere (median {rest.median_km} km), where a prefix covers whole towns and their countryside."],
+        "required": [1, 2, 3]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q3.seller_ramp", "Q3.1",
+      "How do the sales of a new seller develop after its first sale? For the sellers whose first sale was in "
+      "January-June 2017, describe how many of them are still selling and how many orders they receive in each of "
+      "the 12 months after their first month.", TEXT, depends_on=["q2.monthly_orders"])
+def seller_ramp(e):
+    sql = """WITH f AS (SELECT i.seller_id, min(date_trunc('month', o.order_purchase_timestamp)) AS m0
+           FROM order_items i JOIN orders o USING (order_id) GROUP BY 1),
+     x AS (SELECT i.seller_id, date_diff('month', f.m0, date_trunc('month', o.order_purchase_timestamp)) AS k,
+             count(DISTINCT o.order_id) AS orders
+           FROM order_items i JOIN orders o USING (order_id) JOIN f USING (seller_id)
+           WHERE f.m0 >= '2017-01-01' AND f.m0 < '2017-07-01' GROUP BY 1, 2)
+SELECT k AS months_after_first, count(*) AS selling, round(count(*) * 100.0 / max(count(*)) OVER (), 1) AS pct_selling,
+  sum(orders) AS orders, round(avg(orders), 2) AS orders_per_selling_seller
+FROM x WHERE k <= 12 GROUP BY 1 ORDER BY 1"""
+    a = e.q(sql).set_index("months_after_first")
+    mo = monthly(e, "2017-01-01", "2018-06-01")
+    steps = [
+        step("The marketplace grew fast through 2017 and was flat in 2018", uses="q2.monthly_orders",
+             result={"orders_jan_2017": int(mo.iloc[0]), "orders_jun_2017": int(mo["2017-06-01"]),
+                     "orders_jan_2018": int(mo["2018-01-01"])}),
+        step("Sellers of the January-June 2017 cohort: sellers with a sale and their orders, by month after the first "
+             "month of sales", sql=sql, result=tab(a.reset_index())),
+    ]
+    late = a.loc[6:12]
+    gold = {"key_facts": [
+        f"{int(a.selling[0])} sellers made their first sale in January-June 2017. Many stop soon: only "
+        f"{a.pct_selling[1]:.0f}% sell again the next month, and {a.pct_selling[12]:.0f}% still sell 12 months later.",
+        f"Those who stay sell more and more: from {a.orders_per_selling_seller[0]:.1f} orders in the first month to "
+        f"{late.orders_per_selling_seller.min():.1f}-{late.orders_per_selling_seller.max():.1f} a month after six months.",
+        f"Together the cohort's orders grow from {int(a.orders[0]):,} in the first month to "
+        f"{int(late.orders.min()):,}-{int(late.orders.max()):,} a month in months 6-12, in a market that itself more "
+        "than doubled in 2017, so the growth of the survivors outweighs the sellers who leave."], "required": [0, 1]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
 # ====================================================================== Q4 Discover
 @task("q4.unusual_days", "Q4.1",
       "Were there unusual days in the number of orders between November 2017 and June 2018? For each, say what happened.",
       {"type": "json", "schema": {"anomalies": [{"dates": ["date"], "direction": "str", "explanation": "str"}]}},
-      depends_on=["q3.weekly_cycle"], scoring={"metric": "event_f1", "date_tol_days": 1})
+      depends_on=["q3.weekly_cycle", "q3.order_growth"], scoring={"metric": "event_f1", "date_tol_days": 1})
 def unusual_days(e):
     s = daily_orders(e)
     base = weekday_median(s)
@@ -668,6 +992,8 @@ WHERE order_delivered_carrier_date BETWEEN '2018-05-14' AND '2018-06-03' GROUP B
             anomalies.append(a_)
     steps = [step("Purchases follow a weekly cycle: compare each day with the median of the same weekday in the four weeks before",
                   uses="q3.weekly_cycle"),
+             step("Orders grew through 2017: a baseline of the four weeks just before follows the level",
+                  uses="q3.order_growth"),
              step("Daily orders against that baseline; flag days more than 3.5 robust deviations and 40% away", source="db",
                   sql="SELECT CAST(order_purchase_timestamp AS DATE) AS day, count(*) AS orders FROM orders GROUP BY 1 ORDER BY 1",
                   result=tab(pd.DataFrame(flags))),
@@ -684,7 +1010,8 @@ WHERE order_delivered_carrier_date BETWEEN '2018-05-14' AND '2018-06-03' GROUP B
 
 @task("q4.promise_shift", "Q4.2",
       "Did the promised delivery time (purchase to estimated delivery date) change in 2018? Compare it with the actual "
-      "delivery time and say what the change did to late deliveries.", TEXT, depends_on=["q3.delivery_time"])
+      "delivery time and say what the change did to late deliveries.", TEXT,
+      depends_on=["q3.delivery_time", "q2.open_orders_july"])
 def promise_shift(e):
     sql = f"""SELECT date_trunc('month', order_purchase_timestamp)::DATE AS month, count(*) AS orders,
   median(date_diff('day', CAST(order_purchase_timestamp AS DATE), CAST(order_estimated_delivery_date AS DATE))) AS promised_days_median,
@@ -703,6 +1030,8 @@ GROUP BY 1, 2 ORDER BY 1, 2"""
     may, jun, aug, a17 = a.loc["2018-05"], a.loc["2018-06"], a.loc["2018-08"], a.loc["2017-08"]
     slack = lambda r: r.promised_days_mean - r.actual_days_mean
     steps = [step("Delivery times are mostly transport", uses="q3.delivery_time"),
+             step("Some orders of mid 2018 are still on their way when the records end; only delivered orders are "
+                  "compared", uses="q2.open_orders_july"),
              step("Promised and actual days by purchase month (delivered orders)", sql=sql, result=tab(a.reset_index(drop=True))),
              step("August 2017 against August 2018 by region", sql=sql2, result=tab(e.q(sql2)),
                   note="Promises were shortened in every region, more than delivery times fell.")]
@@ -727,7 +1056,7 @@ GROUP BY 1, 2 ORDER BY 1, 2"""
 @task("q4.demand_and_income", "Q4.3",
       "Across the 27 states, how is the number of orders per inhabitant in 2017 related to income (2017 GDP per capita "
       "from IBGE)? Which states depart from the pattern?",
-      TEXT, depends_on=["q1.customer_ids"])
+      TEXT, depends_on=["q1.customer_ids", "q3.delivery_time"])
 def demand_income(e):
     sql = """WITH g AS (SELECT uf, sum(gdp) * 1000 / sum(gdp * 1000 / gdp_per_capita) AS gdp_per_capita FROM municipal_gdp
            WHERE year = 2017 GROUP BY 1),
@@ -743,12 +1072,14 @@ FROM states s JOIN o USING (uf) JOIN g USING (uf) ORDER BY orders_per_100k DESC"
     a["residual"] = np.log(a.orders_per_100k) - np.polyval(b, np.log(a.gdp_per_capita))
     hi, lo = a.loc[a.residual.idxmax()], a.loc[a.residual.idxmin()]
     df = a.set_index("uf")
-    steps = [step("Orders per 100,000 inhabitants and GDP per capita by state", sql=sql, result=tab(a.drop(columns="residual")),
+    steps = [step("Orders per 100,000 inhabitants and GDP per capita by state (an order's state is its customer_id's)",
+                  sql=sql, result=tab(a.drop(columns="residual")), uses="q1.customer_ids",
                   note="State GDP per capita is the sum of municipal GDP over the population IBGE used (GDP / GDP per capita)."),
              step("Rank correlation and a log-log fit", source="calculation",
                   result={"spearman_rho": round(float(rho), 3), "p_value": float(f"{p:.2g}"), "elasticity": round(float(b[0]), 2)}),
              step("Largest departures from the fit", source="calculation",
-                  result=tab(a.sort_values("residual")[["uf", "orders_per_100k", "gdp_per_capita", "residual"]].round(2)))]
+                  result=tab(a.sort_values("residual")[["uf", "orders_per_100k", "gdp_per_capita", "residual"]].round(2))),
+             step("Delivery is slowest in the North and Northeast, which may hold demand back there", uses="q3.delivery_time")]
     gold = {"key_facts": [
         f"Orders per inhabitant rise with income: Spearman rho {rho:.2f} (p {p:.1g}); a 1% higher GDP per capita goes with about "
         f"{b[0]:.1f}% more orders per inhabitant.",
@@ -775,7 +1106,17 @@ def open_review(e):
     ud = unusual_days(e)[1]["anomalies"]
     ps = promise_shift(e)[1]["key_facts"]
     di = demand_income(e)[1]["key_facts"]
-    steps = [step("Demand grew through 2017 and stopped growing in 2018", uses="q3.order_growth", result={"facts": gr[:3]}),
+    sql_h = f"""WITH r AS (SELECT order_id, avg(review_score) AS score FROM order_reviews GROUP BY 1)
+SELECT year(o.order_purchase_timestamp) || '-H' || (CASE WHEN month(o.order_purchase_timestamp) <= 6 THEN 1 ELSE 2 END) AS half,
+  count(*) AS orders, round(avg(r.score), 2) AS avg_score, round(avg({LATE}::INT) FILTER (WHERE o.{DELIVERED}) * 100, 1) AS pct_late
+FROM orders o LEFT JOIN r USING (order_id)
+WHERE o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-09-01' GROUP BY 1 ORDER BY 1"""
+    sql_s = """SELECT c.customer_state AS state, count(*) AS orders, round(count(*) * 100.0 / sum(count(*)) OVER (), 1) AS pct
+FROM orders o JOIN customers c USING (customer_id)
+WHERE o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-09-01' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"""
+    steps = [step("Orders, review score and late share by half-year", sql=sql_h, result=tab(e.q(sql_h))),
+             step("Where the customers are", sql=sql_s, result=tab(e.q(sql_s))),
+             step("Demand grew through 2017 and stopped growing in 2018", uses="q3.order_growth", result={"facts": gr[:3]}),
              step("Unusual days", uses="q4.unusual_days",
                   result={"anomalies": [f"{a_['dates'][0]} to {a_['dates'][-1]}: {a_['explanation']}" for a_ in ud]}),
              step("Lateness drives review scores", uses="q3.delay_and_reviews", result={"facts": dr[:2]}),
@@ -797,12 +1138,237 @@ def open_review(e):
     return steps, gold, resp
 
 
+@task("q4.delivery_stop_july", "Q4.1",
+      "On which weekdays of July 2018 were fewer than a quarter of the usual number of deliveries recorded? What do "
+      "the hand-overs to carriers and the delivery times of those weeks show?",
+      {"type": "json", "schema": {"anomalies": [{"dates": "list[date]", "explanation": "str"}]}},
+      depends_on=["q3.delivery_time", "q2.open_orders_july"], scoring={"metric": "event_f1", "date_tol_days": 0})
+def delivery_stop_july(e):
+    d = e.q("""SELECT CAST(order_delivered_customer_date AS DATE) AS day, count(*) AS n FROM orders
+               WHERE order_delivered_customer_date IS NOT NULL GROUP BY 1""")
+    s = pd.Series(d.n.values, index=pd.to_datetime(d.day)).sort_index()
+    s = s.reindex(pd.date_range("2018-05-01", "2018-08-31"), fill_value=0)
+    base = weekday_median(s)
+    jul = pd.DataFrame({"deliveries": s, "usual": base})["2018-07-01":"2018-07-31"]
+    jul = jul[jul.index.dayofweek < 5]
+    jul["ratio"] = (jul.deliveries / jul.usual).round(3)
+    low = jul[jul.ratio < 0.25]
+    days = [str(x.date()) for x in low.index]
+    sql_c = """SELECT CAST(order_delivered_carrier_date AS DATE) AS handed_to_carrier, count(*) AS orders,
+  median(date_diff('day', CAST(order_delivered_carrier_date AS DATE), CAST(order_delivered_customer_date AS DATE))) AS median_days_to_customer
+FROM orders WHERE order_delivered_carrier_date BETWEEN '2018-07-02' AND '2018-07-25' AND dayofweek(order_delivered_carrier_date) BETWEEN 1 AND 5
+GROUP BY 1 ORDER BY 1"""
+    sql_h = "SELECT date, name, kind FROM calendar WHERE date BETWEEN '2018-07-01' AND '2018-07-31'"
+    c = e.q(sql_c)
+    before = float(c[c.handed_to_carrier.astype(str) < "2018-07-10"].median_days_to_customer.median())
+    stuck = c[c.handed_to_carrier.astype(str).between("2018-07-12", "2018-07-16")]
+    gold = {"anomalies": [{"dates": days, "explanation": "Deliveries almost stopped although sellers kept handing orders "
+                           "to carriers; the orders caught in it took about twice as long to reach the customer. No "
+                           "holiday or event in the records explains it: a disruption of the last mile (or of its "
+                           "recording)."}]}
+    steps = [
+        step("Delivery times are usually a week or two after the hand-over", uses="q3.delivery_time"),
+        step("Deliveries per weekday of July 2018 against the median of the same weekday in the four weeks before",
+             sql="SELECT CAST(order_delivered_customer_date AS DATE) AS day, count(*) AS n FROM orders "
+                 "WHERE order_delivered_customer_date IS NOT NULL GROUP BY 1 ORDER BY 1",
+             result=tab(jul.reset_index().rename(columns={"index": "day"}).round(1))),
+        step("No holiday in the calendar", sql=sql_h, result=tab(e.q(sql_h))),
+        step("60 July orders were handed to a carrier but have no delivery date when the records end",
+             uses="q2.open_orders_july"),
+        step("Hand-overs to carriers by day and how long those orders took to reach the customer", sql=sql_c, result=tab(c),
+             note="Hand-overs continue as usual; orders handed over on July 12-16 take much longer."),
+    ]
+    resp = (f"{', '.join(days)}: only {int(low.deliveries.min())}-{int(low.deliveries.max())} deliveries a day against "
+            f"about {int(low.usual.min())}-{int(low.usual.max())} usually. Sellers kept handing orders to carriers "
+            f"(about {int(stuck.orders.min())}-{int(stuck.orders.max())} a day), but orders handed over on July 12-16 took "
+            f"{stuck.median_days_to_customer.min():.0f}-{stuck.median_days_to_customer.max():.0f} days to arrive, against "
+            f"about {before:.0f} before. No holiday explains it; the last mile (or its recording) stopped for four days.")
+    return steps, gold, resp
+
+
+@task("q4.freight_shift", "Q4.2",
+      "Did freight charges change in 2018? Compare the freight of the same product sold by the same seller to the same "
+      "state before and after, and say when the change happened.", TEXT, depends_on=["q3.order_value", "q2.monthly_orders"])
+def freight_shift(e):
+    sql = """WITH x AS (SELECT i.product_id, i.seller_id, c.customer_state AS st, date_trunc('month', o.order_purchase_timestamp)::DATE AS month,
+           i.freight_value AS f FROM orders o JOIN order_items i USING (order_id) JOIN customers c USING (customer_id)
+           WHERE o.order_purchase_timestamp >= '2017-09-01' AND o.order_purchase_timestamp < '2018-09-01'),
+     b AS (SELECT product_id, seller_id, st, median(f) AS base FROM x WHERE month < DATE '2018-03-01' GROUP BY 1, 2, 3)
+SELECT month, count(*) AS items, round(median(f / base), 3) AS median_ratio_to_base,
+  round(avg((f > base * 1.05)::INT) * 100, 1) AS pct_more_than_5pct_higher, round(avg((f = 0)::INT) * 100, 1) AS pct_free
+FROM x JOIN b USING (product_id, seller_id, st) WHERE b.base > 0 GROUP BY 1 ORDER BY 1"""
+    sql2 = """SELECT date_trunc('month', o.order_purchase_timestamp)::DATE AS month, count(*) AS items,
+  round(median(i.freight_value), 2) AS median_freight, round(median(p.product_weight_g)) AS median_weight_g
+FROM orders o JOIN order_items i USING (order_id) JOIN products p USING (product_id)
+WHERE o.order_purchase_timestamp >= '2017-09-01' AND o.order_purchase_timestamp < '2018-09-01' GROUP BY 1 ORDER BY 1"""
+    a, b = e.q(sql), e.q(sql2)
+    m = a.set_index(a.month.astype(str).str[:7])
+    after = m.loc[["2018-03", "2018-04", "2018-06", "2018-07", "2018-08"]]
+    steps = [
+        step("Order value includes freight", uses="q3.order_value"),
+        step("Orders were flat in 2018, so a change in freight is not a change in volume", uses="q2.monthly_orders"),
+        step("Median freight and weight per month: the raw median rises while items get lighter", sql=sql2, result=tab(b)),
+        step("Freight of the same product, seller and customer state against its median of September 2017-February 2018",
+             sql=sql, result=tab(a),
+             note="Before March each combination is compared with its own baseline, so the ratio is 1 by construction."),
+    ]
+    gold = {"key_facts": [
+        f"Yes, from March 2018: for the same product, seller and state the median freight was {(m.median_ratio_to_base['2018-03'] - 1) * 100:.1f}% "
+        f"higher in March and {(after.median_ratio_to_base.max() - 1) * 100:.0f}% higher by mid 2018, and about half of "
+        f"the items ({after.pct_more_than_5pct_higher.min():.0f}-{after.pct_more_than_5pct_higher.max():.0f}%) cost more than "
+        "5% more in freight.",
+        f"May 2018 is an exception: the ratio fell to {m.median_ratio_to_base['2018-05']:.2f} and "
+        f"{m.pct_free['2018-05']:.1f}% of these items shipped free.",
+        "The raw median freight rises although products get lighter, so the change is in the prices, not in the mix."],
+        "required": [0, 2]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q4.category_reviews", "Q4.3",
+      "Across product categories, how is the average review score related to the share of late deliveries? Which "
+      "categories score much lower or higher than their lateness suggests?", TEXT,
+      depends_on=["q3.delay_and_reviews", "q3.delivery_time"])
+def category_reviews(e):
+    sql = f"""WITH oc AS (SELECT DISTINCT i.order_id, coalesce(t.product_category_name_english, '(none)') AS category
+            FROM order_items i JOIN products p USING (product_id) LEFT JOIN product_category_name_translation t USING (product_category_name)),
+     r AS (SELECT order_id, avg(review_score) AS score FROM order_reviews GROUP BY 1)
+SELECT oc.category, count(*) AS orders, round(avg({LATE}::INT) * 100, 1) AS pct_late, round(avg(r.score), 3) AS avg_score
+FROM orders o JOIN oc USING (order_id) JOIN r USING (order_id) WHERE o.{DELIVERED}
+GROUP BY 1 HAVING count(*) >= 300 AND oc.category <> '(none)' ORDER BY 2 DESC"""
+    a = e.q(sql)
+    rho = float(stats.spearmanr(a.pct_late, a.avg_score).correlation)
+    fit = np.polyfit(a.pct_late, a.avg_score, 1, w=np.sqrt(a.orders))
+    a["residual"] = (a.avg_score - np.polyval(fit, a.pct_late)).round(3)
+    lo, hi = a.sort_values("residual").head(3), a.sort_values("residual", ascending=False).head(3)
+    steps = [
+        step("Late orders get much lower scores", uses="q3.delay_and_reviews"),
+        step("Late means delivered after the promised day; delivered orders with a delivery date only",
+             uses="q3.delivery_time"),
+        step("Late share and average score of delivered orders by category (categories with 300 or more reviewed "
+             "orders; products without a category left out)",
+             sql=sql, result=tab(a.drop(columns="residual"))),
+        step("Rank correlation and a weighted line; each category's distance from the line", source="calculation",
+             result={"categories": len(a), "spearman": round(rho, 3), "score_per_late_point": round(float(fit[0]), 4),
+                     "lowest": tab(lo[["category", "pct_late", "avg_score", "residual"]]),
+                     "highest": tab(hi[["category", "pct_late", "avg_score", "residual"]])}),
+    ]
+    gold = {"key_facts": [
+        f"Categories with more late deliveries have lower scores (Spearman {rho:.2f} across {len(a)} categories): about "
+        f"{abs(fit[0]) * 10:.2f} points less per 10 points of late share.",
+        f"Lower than their lateness suggests: {', '.join(lo.category)} (something other than delivery lowers their "
+        "scores).",
+        f"Higher than their lateness suggests: {', '.join(hi.category)}."], "required": [0, 1]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q4.open_sellers", "Q4.open",
+      "Look at the sellers of the marketplace and report the most important things you notice about where they are, "
+      "how concentrated sales are, and how they perform.", TEXT,
+      depends_on=["q2.spider_local032", "q4.category_reviews", "q4.freight_shift", "q3.seller_ramp"])
+def open_sellers(e):
+    con = """WITH s AS (SELECT seller_id, count(DISTINCT order_id) AS orders, sum(price) AS revenue FROM order_items GROUP BY 1),
+     r AS (SELECT *, row_number() OVER (ORDER BY revenue DESC) AS rk, count(*) OVER () AS n FROM s)
+SELECT max(n) AS sellers_with_sales, round(sum(revenue) FILTER (WHERE rk <= n * 0.1) / sum(revenue) * 100, 1) AS pct_revenue_top_10pct,
+  round(sum(revenue) FILTER (WHERE rk <= n * 0.01) / sum(revenue) * 100, 1) AS pct_revenue_top_1pct,
+  count(*) FILTER (WHERE orders = 1) AS sellers_with_one_order FROM r"""
+    geo = """SELECT s.seller_state, count(DISTINCT s.seller_id) AS sellers, count(DISTINCT i.order_id) AS orders
+FROM sellers s JOIN order_items i USING (seller_id) GROUP BY 1 ORDER BY 3 DESC LIMIT 6"""
+    perf = f"""WITH so AS (SELECT DISTINCT i.seller_id, o.order_id, {LATE} AS late, s.seller_state = c.customer_state AS same_state
+            FROM orders o JOIN order_items i USING (order_id) JOIN sellers s USING (seller_id) JOIN customers c USING (customer_id)
+            WHERE o.{DELIVERED}),
+     ps AS (SELECT seller_id, count(*) AS orders, avg(late::INT) AS late_rate FROM so GROUP BY 1)
+SELECT round(avg(same_state::INT) * 100, 1) AS pct_orders_same_state,
+  (SELECT count(*) FROM ps WHERE orders >= 50) AS sellers_50_orders,
+  (SELECT count(*) FROM ps WHERE orders >= 50 AND late_rate >= 0.15) AS of_them_late_15pct_or_more,
+  (SELECT round(median(late_rate) * 100, 1) FROM ps WHERE orders >= 50) AS median_late_pct
+FROM so"""
+    c, g, p = e.q(con).iloc[0], e.q(geo), e.q(perf).iloc[0]
+    tot = int(e.v("SELECT count(DISTINCT order_id) FROM order_items"))
+    sp = g.set_index("seller_state").loc["SP"]
+    steps = [
+        step("Seller rankings by category of performance", uses="q2.spider_local032"),
+        step("How concentrated revenue is", sql=con, result=tab(e.q(con))),
+        step("Where the sellers are", sql=geo, result=tab(g)),
+        step("Same-state orders and late-delivery rates of sellers with 50 or more delivered orders", sql=perf,
+             result=tab(e.q(perf))),
+        step("Freight rose from March 2018", uses="q4.freight_shift"),
+        step("Some categories score low beyond their lateness", uses="q4.category_reviews"),
+        step("Many new sellers stop after a few months; those who stay grow", uses="q3.seller_ramp"),
+    ]
+    gold = {"key_facts": [
+        f"Sellers are concentrated in São Paulo state: {int(sp.sellers):,} of {int(c.sellers_with_sales):,} sellers with "
+        f"sales and {int(sp.orders) / tot * 100:.0f}% of orders.",
+        f"Sales are concentrated: the top 10% of sellers make {c.pct_revenue_top_10pct:.0f}% of revenue and the top 1% "
+        f"{c.pct_revenue_top_1pct:.0f}%; {int(c.sellers_with_one_order):,} sellers have a single order.",
+        f"Only {p.pct_orders_same_state:.0f}% of delivered orders go to a customer in the seller's state, so most orders "
+        "travel between states.",
+        f"Among the {int(p.sellers_50_orders)} sellers with 50 or more delivered orders, the median late rate is "
+        f"{p.median_late_pct:.1f}% but {int(p.of_them_late_15pct_or_more)} are late on 15% or more of their orders: a small "
+        "group to work with."], "required": [0, 1, 3]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q4.geolocation_outliers", "Q4.1",
+      "Which points of the geolocation table do not fit their ZIP code prefix? Find the points more than 100 km from "
+      "the median point of their prefix and the points outside Brazil, count them, and say what kinds of errors they "
+      "are.", {"type": "json", "schema": {"far_points": "int", "outside_brazil": "int", "kinds": "list[str]"}},
+      depends_on=["q3.zip_points", "q2.spider_local035"],
+      scoring={"metric": "fields", "fields": {"far_points": {"exact": True}, "outside_brazil": {"exact": True}}})
+def geolocation_outliers(e):
+    box = "g.geolocation_lat BETWEEN -34.0 AND 5.4 AND g.geolocation_lng BETWEEN -74.1 AND -32.3"
+    sql1 = f"""WITH d AS (SELECT g.*, {PREFIX_KM} AS km, NOT ({box}) AS outside FROM geolocation g
+           JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix)
+SELECT count(*) FILTER (WHERE km > 100) AS far_points, count(*) FILTER (WHERE outside) AS outside_brazil,
+  count(*) FILTER (WHERE km > 100 AND NOT outside) AS far_inside_brazil,
+  count(DISTINCT geolocation_zip_code_prefix) FILTER (WHERE km > 100) AS prefixes_affected,
+  round(count(*) FILTER (WHERE km > 100) * 100.0 / count(*), 2) AS pct_of_points
+FROM d"""
+    sql2 = f"""SELECT g.geolocation_zip_code_prefix AS prefix, g.geolocation_city AS city, g.geolocation_state AS state,
+  round(g.geolocation_lat, 3) AS lat, round(g.geolocation_lng, 3) AS lng, round({PREFIX_KM}) AS km_from_prefix
+FROM geolocation g JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix
+WHERE NOT ({box}) ORDER BY km_from_prefix DESC"""
+    sql3 = f"""WITH d AS (SELECT g.*, {PREFIX_KM} AS km FROM geolocation g JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix
+           WHERE {box})
+SELECT d.geolocation_state AS state_of_record, s.uf AS state_where_point_lies, count(*) AS points
+FROM d JOIN states s ON ST_Contains(ST_GeomFromText(s.state_geom), ST_Point(d.geolocation_lng, d.geolocation_lat))
+WHERE d.km > 100 GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12"""
+    sql4 = f"""WITH d AS (SELECT g.*, {PREFIX_KM} AS km FROM geolocation g JOIN zip_prefixes z ON z.zip_code_prefix = g.geolocation_zip_code_prefix
+           WHERE {box} AND {PREFIX_KM} > 100)
+SELECT round(avg((s.uf = d.geolocation_state)::INT) * 100, 1) AS pct_in_their_own_state
+FROM d JOIN states s ON ST_Contains(ST_GeomFromText(s.state_geom), ST_Point(d.geolocation_lng, d.geolocation_lat))"""
+    a, o = e.q(sql1).iloc[0], e.q(sql2)
+    st, own = e.q(sql3), float(e.v(sql4))
+    north = int((o.lat > 0).sum())
+    europe = int(((o.lat > 35) & (o.lng > -12) & (o.lng < 20)).sum())
+    kinds = ["outside Brazil: points placed abroad, most of them in southern Europe",
+             "inside Brazil but far from the other points of the prefix, mostly in the same state, some in another state"]
+    gold = {"far_points": int(a.far_points), "outside_brazil": int(a.outside_brazil), "kinds": kinds}
+    steps = [
+        step("Points normally lie within a few kilometers of their prefix's median point; the tail reaches thousands of "
+             "kilometers", uses="q3.zip_points"),
+        step("The largest jump between consecutive points is about 18,000 km", uses="q2.spider_local035"),
+        step("Count the points more than 100 km from their prefix and the points outside Brazil's bounding box", sql=sql1,
+             result=tab(e.q(sql1))),
+        step("The points outside Brazil", sql=sql2, result=tab(o),
+             note=f"{europe} lie in southern Europe (latitude 35-46 N, longitude 12 W to 20 E: Portugal, Spain, Italy); "
+                  f"{north} are north of the equator."),
+        step("Far points inside Brazil: their recorded state against the state the point lies in", sql=sql3, result=tab(st)),
+        step("How many of them lie in their own state", sql=sql4, result={"pct_in_their_own_state": own}),
+    ]
+    resp = (f"{gold['far_points']:,} points ({a.pct_of_points}% of all, in {int(a.prefixes_affected):,} prefixes) lie more "
+            f"than 100 km from the median point of their prefix, and {gold['outside_brazil']} lie outside Brazil, {europe} "
+            f"of them in southern Europe. Of the far points inside Brazil, {own:.0f}% lie in their own state and "
+            f"{100 - own:.0f}% in another one. A ZIP prefix covers a town and its surroundings, so these are geocoding "
+            "errors, not real places of customers or sellers; distances computed from single points need them removed.")
+    return steps, gold, resp
+
+
 # ====================================================================== Q5 Diagnose
 @task("q5.strike_may_2018", "Q5.1",
       "In the last ten days of May 2018 orders, hand-overs to carriers and deliveries all fell. What happened? Rank the "
       "causes, and say what it meant for late deliveries.",
       {"type": "json", "schema": {"causes": [{"cause": "str", "evidence": "str"}]}},
-      depends_on=["q4.unusual_days"], scoring={"metric": "cause_ranking", "judge": "llm"})
+      depends_on=["q4.unusual_days", "q3.delivery_time"], scoring={"metric": "cause_ranking", "judge": "llm"})
 def strike(e):
     daily = """WITH o AS (SELECT CAST(order_purchase_timestamp AS DATE) AS day, count(*) AS n FROM orders GROUP BY 1),
      c AS (SELECT CAST(order_delivered_carrier_date AS DATE) AS day, count(*) AS n FROM orders GROUP BY 1),
@@ -834,6 +1400,7 @@ GROUP BY 1 ORDER BY 1"""
     pre, w28 = c.loc["2018-05-14"], c.loc["2018-05-28"]
     cal = e.q("SELECT date, name, kind FROM calendar WHERE date BETWEEN '2018-05-14' AND '2018-06-10'")
     steps = [step("The flagged days of late May 2018", uses="q4.unusual_days"),
+             step("Deliveries usually reach customers about a week after the hand-over to the carrier", uses="q3.delivery_time"),
              step("Read what happened from May 21, 2018", doc=quote("strike", 0, 1, 2, 3)),
              step("Orders, hand-overs to carriers and deliveries per day", sql=sql, result=tab(a)),
              step("Weekday averages: April, the strike, June", sql=sql_p, result=tab(per.reset_index()),
@@ -873,7 +1440,7 @@ GROUP BY 1 ORDER BY 1"""
       "Late deliveries rose from about 4% of orders bought in the first half of January 2018 to about 25% of orders bought "
       "from February 19 to March 18, 2018. How much of the rise came from shorter promises, and how much from slower "
       "transport?", {"type": "json", "schema": {"promise_points": "float", "transport_points": "float"}},
-      depends_on=["q3.delivery_time"],
+      depends_on=["q3.delivery_time", "q4.promise_shift"],
       scoring={"metric": "fields", "fields": {"promise_points": {"abs_tol": 3}, "transport_points": {"abs_tol": 3}}})
 def late_spike(e):
     sql = f"""SELECT CASE WHEN order_purchase_timestamp < '2018-01-15' THEN 'Jan 1-14' ELSE 'Feb 19-Mar 18' END AS period, count(*) AS orders,
@@ -904,6 +1471,7 @@ FROM orders WHERE {DELIVERED} AND order_delivered_carrier_date IS NOT NULL
     gold = {"promise_points": round(promise, 1), "transport_points": round(transport, 1), "other_points": round(other, 1),
             "late_pct": {"jan_1_14": round(lb, 1), "feb_19_mar_18": round(L00, 1)}}
     steps = [step("Delivery time is mostly the carrier leg", uses="q3.delivery_time"),
+             step("Promised delivery times changed during 2018", uses="q4.promise_shift"),
              step("Compare the two periods: promise, seller handling and transport", sql=sql, result=tab(per.reset_index()),
                   note="Sellers handed orders to carriers as fast as before; promises got shorter and transport slower."),
              step("Counterfactual late shares of the peak orders (Shapley decomposition of two shifts)", source="calculation",
@@ -925,7 +1493,7 @@ FROM orders WHERE {DELIVERED} AND order_delivered_carrier_date IS NOT NULL
 @task("q5.september_late", "Q5.1",
       "A dashboard of deliveries by month shows that 100% of the orders delivered in September 2018 were late. Did "
       "delivery performance collapse in September 2018?", {"type": "json", "schema": {"collapse": "bool", "explanation": "str"}},
-      depends_on=["q2.spider_local028", "q3.delivery_time"], control="decoy",
+      depends_on=["q2.spider_local028", "q3.delivery_time", "q4.delivery_stop_july"], control="decoy",
       scoring={"metric": "fields+explanation", "fields": ["collapse"], "judge": "llm"})
 def september_late(e):
     sql = f"""SELECT date_trunc('month', order_delivered_customer_date)::DATE AS delivery_month, count(*) AS delivered,
@@ -944,7 +1512,9 @@ FROM orders WHERE order_status = 'delivered'"""
              step("Where the records end", sql=sql2, result=tab(e.q(sql2)),
                   note="No order bought after August 29 was delivered in the data: the records stop."),
              step("Delivery takes about 10 days; an order still on its way after the records stop is an old, delayed one",
-                  uses="q3.delivery_time")]
+                  uses="q3.delivery_time"),
+             step("Orders caught in the July 2018 stop took about twice as long to arrive: late deliveries trail an event",
+                  uses="q4.delivery_stop_july")]
     gold = {"collapse": False, "sep_delivered": int(sep.delivered), "aug_delivered": int(aug.delivered),
             "aug_pct_late": float(aug.pct_late)}
     resp = (f"No. September 2018 has only {int(sep.delivered)} deliveries against {int(aug.delivered):,} in August. The records end with "
@@ -958,7 +1528,7 @@ FROM orders WHERE order_status = 'delivered'"""
       "The Spider 2.0 task local035 finds that the largest jump between consecutive geolocation points is about 18,000 km, "
       "from santa cruz do sul to santa lucia do piai. Is that a real distance between two Brazilian towns? What explains it, "
       "and what is the distance with corrected positions?",
-      {"type": "json", "schema": {"real": "bool", "corrected_km": "float"}}, depends_on=["q2.spider_local035"],
+      {"type": "json", "schema": {"real": "bool", "corrected_km": "float"}}, depends_on=["q2.spider_local035", "q4.geolocation_outliers"],
       scoring={"metric": "fields", "fields": {"real": {"exact": True}, "corrected_km": {"rel_tol": 0.25}}})
 def geolocation_jump(e):
     a = e.q(SP_LOCAL035).iloc[0]
@@ -978,7 +1548,8 @@ WHERE (name = 'Caxias do Sul' OR name = 'Santa Cruz do Sul') AND uf = 'RS' ORDER
     m = e.q(sql4).set_index("name")
     km = float(hav_km(m.loc["Santa Cruz do Sul"].centroid_lat, m.loc["Santa Cruz do Sul"].centroid_lon,
                       m.loc[home].centroid_lat, m.loc[home].centroid_lon))
-    steps = [step("The pair and its coordinates", uses="q2.spider_local035",
+    steps = [step("Several hundred points lie far from their prefix, a few outside Brazil", uses="q4.geolocation_outliers"),
+             step("The pair and its coordinates", uses="q2.spider_local035",
                   result={"prev_city": a.prev_city, "city": a.city, "lat": round(float(a.lat), 4), "lng": round(float(a.lng), 4),
                           "distance_km": round(float(a.distance_km))}),
              step("The points of the two towns", sql=sql1, result=tab(pts),
@@ -1002,7 +1573,7 @@ WHERE (name = 'Caxias do Sul' OR name = 'Santa Cruz do Sul') AND uf = 'RS' ORDER
       "(IPCA), and in US dollars?",
       {"type": "json", "schema": {"price_share_pct": "float", "freight_share_pct": "float", "real_change_pct": "float",
                                   "usd_change_pct": "float"}},
-      depends_on=["q2.monthly_orders"],
+      depends_on=["q2.monthly_orders", "q4.freight_shift"],
       scoring={"metric": "fields", "fields": {"freight_share_pct": {"abs_tol": 10}, "real_change_pct": {"abs_tol": 0.5},
                                               "usd_change_pct": {"abs_tol": 1.0}}})
 def order_value(e):
@@ -1030,6 +1601,7 @@ WHERE month(month) <= 8 AND year(month) IN (2017, 2018) GROUP BY 1 ORDER BY 1"""
             "nominal_change_pct": round(nominal * 100, 2), "inflation_pct": round(infl * 100, 2),
             "real_change_pct": round(real * 100, 2), "usd_change_pct": round(usd * 100, 2)}
     steps = [step("Orders and their value by month", uses="q2.monthly_orders"),
+             step("Freight for the same product, seller and state rose from March 2018", uses="q4.freight_shift"),
              step("Average price, freight and order value per order, in R$ and in US$ at the rate of the purchase day", sql=sql,
                   result=tab(a.reset_index()), note="Each order is converted with the last published rate on or before its purchase day."),
              step("Price level: average IPCA index over January-August of each year (December 2015 = 1)", sql=sql2, result=tab(b.reset_index())),
@@ -1044,34 +1616,132 @@ WHERE month(month) <= 8 AND year(month) IN (2017, 2018) GROUP BY 1 ORDER BY 1"""
     return steps, gold, resp
 
 
+@task("q5.holidays_2017", "Q5.2",
+      "How many orders did the public holidays of February to December 2017 cost? For each national or secondary "
+      "holiday on a weekday, give the change against the median of the same weekday in the four weeks before and the "
+      "orders lost, and say which holidays account for most of the loss.",
+      {"type": "json", "schema": {"lost_orders": "int", "by_holiday": "dict[str, int]"}},
+      depends_on=["q4.unusual_days", "q3.weekly_cycle", "q3.order_growth"],
+      scoring={"metric": "fields", "fields": {"lost_orders": {"tol_pct": 15}}})
+def holidays_2017(e):
+    s = daily_orders(e)
+    base = weekday_median(s)
+    sql = """SELECT date, name, kind FROM calendar WHERE kind IN ('national holiday', 'secondary holiday')
+  AND date BETWEEN '2017-02-01' AND '2017-12-31' AND dayofweek(date) BETWEEN 1 AND 5 ORDER BY 1"""
+    cal = e.q(sql)
+    rows = []
+    for r in cal.itertuples():
+        d = pd.Timestamp(r.date)
+        rows.append(dict(date=str(d.date()), holiday=r.name, weekday=d.day_name(), orders=int(s[d]),
+                         usual=float(base[d]), change_pct=round((s[d] / base[d] - 1) * 100, 1),
+                         lost=int(round(base[d] - s[d]))))
+    h = pd.DataFrame(rows)
+    tot = int(h.lost.sum())
+    top = h.sort_values("lost", ascending=False)
+    share3 = float(top.lost.head(3).sum() / tot * 100)
+    yr = int(s["2017-02-01":"2017-12-31"].sum())
+    gold = {"lost_orders": tot, "by_holiday": {r.holiday: int(r.lost) for r in h.itertuples()}}
+    steps = [
+        step("Christmas Day stands out among the unusual days; most other holidays do not", uses="q4.unusual_days"),
+        step("Orders follow the weekday cycle: compare with the median of the same weekday in the four weeks before",
+             uses="q3.weekly_cycle"),
+        step("Orders grew through 2017, so the baseline uses only the weeks just before the day", uses="q3.order_growth"),
+        step("Weekday holidays of February-December 2017", sql=sql, result=tab(cal)),
+        step("Orders, usual orders, change and orders lost on each holiday", source="db",
+             sql="SELECT CAST(order_purchase_timestamp AS DATE) AS day, count(*) AS orders FROM orders GROUP BY 1 ORDER BY 1",
+             result=tab(h)),
+        step("Total and the largest contributions", source="calculation",
+             result={"lost_orders": tot, "pct_of_orders_feb_dec_2017": round(tot / yr * 100, 2),
+                     "top_3": top.holiday.head(3).tolist(), "top_3_share_pct": round(share3, 1)}),
+    ]
+    gain = h[h.lost < 0]
+    resp = (f"The {len(h)} weekday holidays of February-December 2017 cost about {tot:,} orders "
+            f"({tot / yr * 100:.1f}% of the period's orders). Christmas Day alone cost {int(top.lost.iloc[0]):,} "
+            f"({top.change_pct.iloc[0]:+.0f}%), followed by " + " and ".join(
+                f"{r.holiday} ({r.change_pct:+.0f}%, {r.lost:,} orders)" for r in top.iloc[1:3].itertuples())
+            + ". Some holidays had more orders than usual (" + ", ".join(f"{r.holiday} {r.change_pct:+.0f}%" for r in gain.itertuples())
+            + "), so the loss of a holiday is small and partly made up nearby; only Christmas costs many orders.")
+    return steps, gold, resp
+
+
+SELLER_FIRST = """f AS (SELECT i.seller_id, min(o.order_purchase_timestamp) AS t0 FROM order_items i JOIN orders o USING (order_id)
+           GROUP BY 1)"""
+
+
+@task("q5.seller_growth_2018", "Q5.2",
+      "Orders of January-April 2018 were far above January-April 2017. How much of the increase came from sellers who "
+      "made their first sale before 2017, in 2017, and in 2018?",
+      {"type": "json", "schema": {"before_2017_pct": "float", "first_sale_2017_pct": "float", "first_sale_2018_pct": "float"}},
+      depends_on=["q4.open_sellers", "q3.seller_ramp"],
+      scoring={"metric": "fields", "fields": {"first_sale_2017_pct": {"tol": 5}, "first_sale_2018_pct": {"tol": 5}}})
+def seller_growth_2018(e):
+    sql = f"""WITH {SELLER_FIRST},
+     x AS (SELECT DISTINCT i.seller_id, o.order_id, year(o.order_purchase_timestamp) AS year,
+             CASE WHEN f.t0 < '2017-01-01' THEN 'a: before 2017' WHEN f.t0 < '2018-01-01' THEN 'b: 2017' ELSE 'c: 2018' END AS first_sale
+           FROM orders o JOIN order_items i USING (order_id) JOIN f USING (seller_id)
+           WHERE month(o.order_purchase_timestamp) <= 4 AND year(o.order_purchase_timestamp) IN (2017, 2018))
+SELECT first_sale, count(DISTINCT seller_id) FILTER (WHERE year = 2018) AS sellers_2018,
+  count(*) FILTER (WHERE year = 2017) AS seller_orders_2017, count(*) FILTER (WHERE year = 2018) AS seller_orders_2018
+FROM x GROUP BY 1 ORDER BY 1"""
+    sql2 = """SELECT year(order_purchase_timestamp) AS year, count(*) AS orders FROM orders
+WHERE month(order_purchase_timestamp) <= 4 AND year(order_purchase_timestamp) IN (2017, 2018) GROUP BY 1 ORDER BY 1"""
+    a = e.q(sql).set_index("first_sale")
+    o = e.q(sql2).set_index("year").orders
+    a["change"] = a.seller_orders_2018 - a.seller_orders_2017
+    inc = float(a.change.sum())
+    pct = (a.change / inc * 100).round(1)
+    gold = {"before_2017_pct": float(pct["a: before 2017"]), "first_sale_2017_pct": float(pct["b: 2017"]),
+            "first_sale_2018_pct": float(pct["c: 2018"])}
+    steps = [
+        step("Sales are concentrated in a small group of sellers", uses="q4.open_sellers"),
+        step("New sellers that survive grow for a year", uses="q3.seller_ramp"),
+        step("Orders of January-April 2017 and 2018", sql=sql2, result=tab(o.reset_index())),
+        step("Orders per seller group (an order with sellers of two groups counts in both)", sql=sql,
+             result=tab(a.reset_index())),
+        step("Each group's share of the increase", source="calculation", result=gold),
+    ]
+    resp = (f"Orders rose from {int(o[2017]):,} to {int(o[2018]):,}. Sellers whose first sale was in 2017 brought "
+            f"{gold['first_sale_2017_pct']:.0f}% of the increase, sellers new in 2018 {gold['first_sale_2018_pct']:.0f}%, and "
+            f"the sellers of 2016 {gold['before_2017_pct']:+.0f}% (their orders "
+            f"{'fell' if a.change['a: before 2017'] < 0 else 'rose'}). The growth came from the sellers recruited during "
+            "2017 growing into their second year.")
+    return steps, gold, resp
+
+
 # ====================================================================== Q6 Predict
-@task("q6.july_orders", "Q6.1", "Using the orders purchased up to May 2018 only, forecast the number of orders purchased in "
+@task("q6.july_orders", "Q6.1", "Using the orders purchased up to June 2018 only, forecast the number of orders purchased in "
       "July 2018. How close is the forecast to the recorded number?", {"type": "number"},
-      depends_on=["q2.monthly_orders", "q3.order_growth"], scoring={"metric": "ape", "bands": [0.05, 0.1, 0.2]})
+      depends_on=["q2.monthly_orders", "q3.order_growth", "q5.strike_may_2018"], scoring={"metric": "ape", "bands": [0.05, 0.1, 0.2]})
 def july_orders(e):
-    s = monthly(e, "2017-01-01", "2018-05-01")
-    ref = float(s["2018-01-01":"2018-05-01"].mean())
+    s = monthly(e, "2017-01-01", "2018-06-01")
+    lvl = s["2018-01-01":"2018-06-01"].drop(pd.Timestamp("2018-05-01"))
+    ref = float(lvl.mean())
+    with_may = float(s["2018-01-01":"2018-06-01"].mean())
     naive_trend = float(np.polyval(np.polyfit(np.arange(len(s)), s.values, 1), len(s) + 1))
     sql = "SELECT count(*) AS orders_july_2018 FROM orders WHERE order_purchase_timestamp >= '2018-07-01' AND order_purchase_timestamp < '2018-08-01'"
     actual = int(e.v(sql))
-    steps = [step("Monthly orders up to May 2018", uses="q2.monthly_orders",
+    steps = [step("Monthly orders up to June 2018", uses="q2.monthly_orders",
                   result={str(k.date())[:7]: int(v) for k, v in s["2018-01-01":].items()}),
              step("Growth stopped in 2018, so a 2017 trend line overshoots", uses="q3.order_growth", source="calculation",
                   result={"linear_trend_2017_2018": round(naive_trend)}),
-             step("Forecast with the 2018 level: mean of January-May 2018", source="calculation", result={"forecast": round(ref)}),
+             step("The truck drivers' strike cut orders at the end of May; June was back to normal",
+                  uses="q5.strike_may_2018"),
+             step("Forecast with the 2018 level: mean of January-June 2018 without May", source="calculation",
+                  result={"forecast": round(ref), "mean_with_may": round(with_may)}),
              step("Compare with the orders recorded in July 2018", sql=sql,
                   result={"actual": actual, "error_of_level_forecast": round(ref / actual - 1, 4),
                           "error_of_trend_forecast": round(naive_trend / actual - 1, 4)})]
     gold = {"value": actual}
-    resp = (f"About {ref:,.0f} orders: growth ended in 2018 and January-May 2018 averaged {ref:,.0f} a month (a straight trend over "
-            f"2017-2018 would give {naive_trend:,.0f}, too high). Recorded: {actual:,}.")
+    resp = (f"About {ref:,.0f} orders: growth ended in 2018, and January-June 2018 without May, which the truck drivers' "
+            f"strike cut, averaged {ref:,.0f} a month (a straight trend over 2017-2018 would give {naive_trend:,.0f}, too "
+            f"high). Recorded: {actual:,}.")
     return steps, gold, resp
 
 
 @task("q6.holidays_2018", "Q6.2",
       "Carnival Tuesday (February 13) and Good Friday (March 30) fall in 2018. From the 2017 holidays, how much lower should "
       "orders be on these two days than on a normal day of the same weekday? How large was the change on each day?",
-      {"type": "json", "schema": {"change_pct_by_day": "dict[date, float]"}}, depends_on=["q3.weekly_cycle"],
+      {"type": "json", "schema": {"change_pct_by_day": "dict[date, float]"}}, depends_on=["q3.weekly_cycle", "q3.order_growth", "q5.holidays_2017", "q3.month_cycle"],
       scoring={"metric": "fields", "fields": {"change_pct_by_day": {"abs_tol": 10.0}}})
 def holidays_2018(e):
     s = daily_orders(e)
@@ -1091,6 +1761,10 @@ def holidays_2018(e):
     gold = {"change_pct_by_day": {r.date: r.change_pct for r in target.itertuples()}}
     steps = [step("Orders follow the weekday cycle: compare with the median of the same weekday in the four weeks before",
                   uses="q3.weekly_cycle"),
+             step("The 2018 level is flat, so the four weeks before a day are a fair baseline", uses="q3.order_growth"),
+             step("In 2017 most holidays cost few orders, and some even gained", uses="q5.holidays_2017"),
+             step("There is no monthly cycle, so a holiday in mid-month and one at the end of a month compare alike",
+                  uses="q3.month_cycle"),
              step("Daily orders against that baseline on the 2017 and 2018 holidays", source="db",
                   sql="SELECT date, name, kind FROM calendar WHERE kind IN ('national holiday', 'secondary holiday') ORDER BY 1",
                   result=tab(h)),
@@ -1107,7 +1781,7 @@ def holidays_2018(e):
       "Orders bought in August 2018 were promised much faster delivery than before. If their promised dates had been 5 days "
       "later, what share of the delivered August orders would have been late, instead of the recorded share? And with the "
       "promise lengths of June 2018 orders?", {"type": "json", "schema": {"late_pct_plus5": "float", "late_pct_june_promise": "float"}},
-      depends_on=["q4.promise_shift"],
+      depends_on=["q4.promise_shift", "q5.late_spike_2018", "q2.open_orders_july", "q1.customer_ids"],
       scoring={"metric": "fields", "fields": {"late_pct_plus5": {"abs_tol": 0.5}, "late_pct_june_promise": {"abs_tol": 1.0}}})
 def promise_whatif(e):
     sql = f"""SELECT count(*) AS delivered, round(avg({LATE}::INT) * 100, 2) AS late_pct_recorded,
@@ -1125,6 +1799,10 @@ WHERE o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NU
     gold = {"late_pct_recorded": float(a.late_pct_recorded), "late_pct_plus5": float(a.late_pct_plus5),
             "late_pct_june_promise": float(b.late_pct_june_promise)}
     steps = [step("The promise was cut in mid-2018", uses="q4.promise_shift"),
+             step("A shorter promise raises the late share directly; in early 2018 it explained part of the late spike",
+                  uses="q5.late_spike_2018"),
+             step("Only delivered August orders can be judged; some are still on their way", uses="q2.open_orders_july"),
+             step("An order's state is that of its customer_id", uses="q1.customer_ids"),
              step("August orders: recorded late share, and with each promise 5 days later", sql=sql, result=tab(e.q(sql))),
              step("August orders judged against the June 2018 average promise of their state", sql=sql2, result=tab(e.q(sql2)),
                   note="The actual delivery days stay as recorded; only the promise changes.")]
@@ -1134,12 +1812,176 @@ WHERE o.order_status = 'delivered' AND o.order_delivered_customer_date IS NOT NU
     return steps, gold, resp
 
 
+@task("q6.gmv_august", "Q6.1", "Using the orders purchased up to June 2018 only, forecast the gross merchandise value "
+      "(item prices plus freight) of the orders purchased in August 2018. How close is the forecast to the recorded value?",
+      {"type": "number"}, depends_on=["q2.monthly_orders", "q3.order_growth", "q5.strike_may_2018"],
+      scoring={"metric": "ape", "bands": [0.05, 0.1, 0.2]})
+def gmv_august(e):
+    sql = """SELECT date_trunc('month', o.order_purchase_timestamp)::DATE AS month, round(sum(i.price + i.freight_value), 2) AS gmv
+FROM orders o JOIN order_items i USING (order_id)
+WHERE o.order_purchase_timestamp >= '2017-01-01' AND o.order_purchase_timestamp < '2018-07-01' GROUP BY 1 ORDER BY 1"""
+    a = e.q(sql)
+    g = pd.Series(a.gmv.values, index=pd.to_datetime(a.month))
+    last3 = g["2018-04-01":"2018-06-01"]
+    ref = float(last3.drop(pd.Timestamp("2018-05-01")).mean())
+    with_may = float(last3.mean())
+    yoy = float(g["2018-04-01":"2018-06-01"].sum() / g["2017-04-01":"2017-06-01"].sum())
+    sql2 = """SELECT round(sum(i.price + i.freight_value), 2) AS gmv_august_2018 FROM orders o JOIN order_items i USING (order_id)
+WHERE o.order_purchase_timestamp >= '2018-08-01' AND o.order_purchase_timestamp < '2018-09-01'"""
+    actual = float(e.v(sql2))
+    steps = [step("Monthly GMV up to June 2018", sql=sql, result=tab(a), uses="q2.monthly_orders"),
+             step("Orders stopped growing in 2018: use the recent level (a year-over-year factor would assume the 2017 "
+                  "growth continues)", uses="q3.order_growth", source="calculation",
+                  result={"apr_jun_vs_2017": round(yoy, 3)}),
+             step("The truck drivers' strike cut May: take the mean of April and June", uses="q5.strike_may_2018",
+                  source="calculation", result={"forecast": round(ref, 2), "mean_apr_jun_with_may": round(with_may, 2)}),
+             step("Compare with the recorded GMV of August 2018", sql=sql2,
+                  result={"actual": actual, "error_of_this_forecast": round(ref / actual - 1, 4)})]
+    resp = (f"About R$ {ref / 1e6:.2f} million, the mean of April and June 2018 (May was cut by the truck drivers' "
+            "strike): orders have been flat in 2018, so last "
+            f"year's growth ({(yoy - 1) * 100:+.0f}% against April-June 2017) should not be carried forward. "
+            f"(Recorded: R$ {actual / 1e6:.2f} million.)")
+    return steps, {"value": round(actual, 2)}, resp
+
+
+@task("q6.repeat_after_late", "Q6.2",
+      "Customers whose first order arrives late may not come back. From the first orders of 2017, how much less likely "
+      "is a customer with a late first order to order again within 180 days? Predict the repeat rate of customers whose "
+      "first order of January-February 2018 arrived late, and compare it with what happened.",
+      {"type": "json", "schema": {"predicted_pct": "float", "recorded_pct": "float"}},
+      depends_on=["q1.customer_ids", "q3.delay_and_reviews", "q5.late_spike_2018"],
+      scoring={"metric": "fields", "fields": {"recorded_pct": {"abs_tol": 0.3}}})
+def repeat_after_late(e):
+    sql = f"""WITH f AS (SELECT c.customer_unique_id AS person, min(o.order_purchase_timestamp) AS t0
+           FROM orders o JOIN customers c USING (customer_id) GROUP BY 1),
+     fo AS (SELECT f.person, f.t0, {LATE} AS late FROM f JOIN customers c ON c.customer_unique_id = f.person
+            JOIN orders o USING (customer_id) WHERE o.order_purchase_timestamp = f.t0 AND o.{DELIVERED}),
+     r AS (SELECT fo.*, EXISTS (SELECT 1 FROM customers c2 JOIN orders o2 USING (customer_id)
+                               WHERE c2.customer_unique_id = fo.person AND o2.order_purchase_timestamp > fo.t0 + INTERVAL 1 DAY
+                                 AND o2.order_purchase_timestamp <= fo.t0 + INTERVAL 180 DAY) AS again FROM fo)
+SELECT CASE WHEN t0 < '2018-01-01' THEN '2017' ELSE '2018 Jan-Feb' END AS first_orders, late, count(*) AS customers,
+  round(avg(again::INT) * 100, 2) AS pct_ordered_again
+FROM r WHERE t0 >= '2017-01-01' AND t0 < '2018-03-01' GROUP BY ALL ORDER BY 1, 2"""
+    a = e.q(sql)
+    g = {(r.first_orders, bool(r.late)): r for r in a.itertuples()}
+    rel = g[("2017", True)].pct_ordered_again / g[("2017", False)].pct_ordered_again
+    pred = rel * g[("2018 Jan-Feb", False)].pct_ordered_again
+    rec = g[("2018 Jan-Feb", True)].pct_ordered_again
+    gold = {"predicted_pct": round(float(pred), 2), "recorded_pct": float(rec), "ratio_2017": round(float(rel), 3)}
+    steps = [
+        step("Count people by customer_unique_id, not customer_id", uses="q1.customer_ids"),
+        step("Late orders get low reviews", uses="q3.delay_and_reviews"),
+        step("Late deliveries rose sharply for orders bought from mid-February 2018", uses="q5.late_spike_2018"),
+        step("Repeat rate within 180 days after a delivered first order, by lateness (orders after the first day only)",
+             sql=sql, result=tab(a)),
+        step("Apply the 2017 ratio to the on-time customers of January-February 2018", source="calculation", result=gold),
+    ]
+    resp = (f"In 2017 a late first order cut the 180-day repeat rate from {g[('2017', False)].pct_ordered_again:.2f}% to "
+            f"{g[('2017', True)].pct_ordered_again:.2f}% ({(rel - 1) * 100:+.0f}%). Applied to the on-time customers of "
+            f"January-February 2018 ({g[('2018 Jan-Feb', False)].pct_ordered_again:.2f}%), that predicts {pred:.2f}% for "
+            f"those with a late first order; the recorded rate is {rec:.2f}%. Repeat purchases are rare either way.")
+    return steps, gold, resp
+
+
+@task("q6.on_time_reviews", "Q6.3",
+      "What if every late delivery had arrived on time? If late orders had received the review scores of on-time orders "
+      "of the same month, what would the average review score of delivered orders of 2017 and of January-August 2018 "
+      "have been?", {"type": "json", "schema": {"score_2017": "float", "score_2018": "float"}},
+      depends_on=["q3.delay_and_reviews", "q5.late_spike_2018", "q4.promise_shift"],
+      scoring={"metric": "fields", "fields": {"score_2017": {"tol": 0.02}, "score_2018": {"tol": 0.02}}})
+def on_time_reviews(e):
+    sql = f"""WITH r AS (SELECT order_id, avg(review_score) AS score FROM order_reviews GROUP BY 1)
+SELECT date_trunc('month', o.order_purchase_timestamp)::DATE AS month, {LATE} AS late, count(*) AS orders, avg(r.score) AS avg_score
+FROM orders o JOIN r USING (order_id) WHERE o.{DELIVERED} AND o.order_purchase_timestamp >= '2017-01-01'
+  AND o.order_purchase_timestamp < '2018-09-01' GROUP BY 1, 2 ORDER BY 1, 2"""
+    a = e.q(sql)
+    a["year"] = pd.to_datetime(a.month).dt.year
+    on = a[~a.late].set_index("month").avg_score
+    a["whatif"] = np.where(a.late, a.month.map(on), a.avg_score)
+    out = {}
+    for y in (2017, 2018):
+        x = a[a.year == y]
+        out[y] = dict(actual=round(float((x.avg_score * x.orders).sum() / x.orders.sum()), 3),
+                      whatif=round(float((x.whatif * x.orders).sum() / x.orders.sum()), 3),
+                      pct_late=round(float(x[x.late].orders.sum() / x.orders.sum() * 100), 1))
+    gold = {"score_2017": out[2017]["whatif"], "score_2018": out[2018]["whatif"],
+            "actual_2017": out[2017]["actual"], "actual_2018": out[2018]["actual"]}
+    steps = [
+        step("Late orders score much lower", uses="q3.delay_and_reviews"),
+        step("Late deliveries rose in early 2018", uses="q5.late_spike_2018"),
+        step("Shorter promises from mid 2018 raised the late share again", uses="q4.promise_shift"),
+        step("Reviewed delivered orders and average score by purchase month and lateness", sql=sql,
+             result=tab(a.drop(columns=["year", "whatif"]).round(3))),
+        step("Give each late order the on-time average of its month and recompute the yearly averages",
+             source="calculation", result={str(k): v for k, v in out.items()}),
+    ]
+    resp = (f"2017: {out[2017]['whatif']:.2f} instead of {out[2017]['actual']:.2f} ({out[2017]['pct_late']}% of orders late). "
+            f"January-August 2018: {out[2018]['whatif']:.2f} instead of {out[2018]['actual']:.2f} ({out[2018]['pct_late']}% "
+            "late). Lateness costs more in 2018 because more orders were late. The calculation assumes a late order "
+            "would have been reviewed like the on-time orders of the same month.")
+    return steps, gold, resp
+
+
+@task("q6.new_seller_orders", "Q6.1",
+      "Using the orders purchased up to April 2018 only, forecast how many orders the sellers whose first sale was in "
+      "January or February 2018 will receive in May-August 2018. How close is the forecast to the recorded number?",
+      {"type": "number"}, depends_on=["q3.seller_ramp", "q5.seller_growth_2018", "q2.monthly_orders"],
+      scoring={"metric": "ape", "bands": [0.1, 0.2, 0.3]})
+def new_seller_orders(e):
+    def cohort(a, b, until):
+        return f"""WITH {SELLER_FIRST},
+     x AS (SELECT DISTINCT i.seller_id, o.order_id, date_trunc('month', f.t0)::DATE AS cohort,
+             date_diff('month', date_trunc('month', f.t0), date_trunc('month', o.order_purchase_timestamp)) AS k
+           FROM orders o JOIN order_items i USING (order_id) JOIN f USING (seller_id)
+           WHERE f.t0 >= '{a}' AND f.t0 < '{b}' AND o.order_purchase_timestamp < '{until}')
+SELECT cohort, k AS months_after_first, count(*) AS orders FROM x GROUP BY 1, 2 ORDER BY 1, 2"""
+    sql17, sql18 = cohort("2017-01-01", "2017-03-01", "2018-01-01"), cohort("2018-01-01", "2018-03-01", "2018-05-01")
+    h, c = e.q(sql17), e.q(sql18)
+    rows, fc = [], 0.0
+    for m, base_k, fut_k in [(1, [2, 3], [4, 5, 6, 7]), (2, [1, 2], [3, 4, 5, 6])]:
+        h_m = h[pd.to_datetime(h.cohort).dt.month == m].set_index("months_after_first").orders
+        ratio = float(h_m.reindex(fut_k).sum() / h_m.reindex(base_k).sum())
+        base = float(c[pd.to_datetime(c.cohort).dt.month == m].set_index("months_after_first").orders.reindex(base_k).sum())
+        rows.append(dict(cohort=f"2018-{m:02d}", orders_mar_apr_2018=int(base), ratio_from_2017_cohort=round(ratio, 3),
+                         forecast=round(base * ratio)))
+        fc += base * ratio
+    mo = monthly(e, "2017-01-01", "2018-04-01")
+    mkt17 = mo["2017-05-01":"2017-08-01"].sum() / mo["2017-03-01":"2017-04-01"].sum() / 2
+    mkt = float(mo["2018-03-01":"2018-04-01"].mean() / mo["2018-01-01":"2018-02-01"].mean())
+    adj = fc / mkt17
+    sql_a = f"""WITH {SELLER_FIRST}
+SELECT count(DISTINCT o.order_id) AS orders_may_aug_2018 FROM orders o JOIN order_items i USING (order_id) JOIN f USING (seller_id)
+WHERE f.t0 >= '2018-01-01' AND f.t0 < '2018-03-01' AND o.order_purchase_timestamp >= '2018-05-01' AND o.order_purchase_timestamp < '2018-09-01'"""
+    actual = int(e.v(sql_a))
+    t = pd.DataFrame(rows)
+    steps = [
+        step("A new seller's orders grow for months after the first sale", uses="q3.seller_ramp"),
+        step("The growth of early 2018 came from sellers in their first year or two", uses="q5.seller_growth_2018"),
+        step("The orders of the sellers who started in January-February 2017, by month after the first month", sql=sql17,
+             result=tab(h, limit=16)),
+        step("The sellers who started in January-February 2018, up to April 2018", sql=sql18, result=tab(c)),
+        step("Carry each cohort forward with the 2017 ratio of its months in May-August to its months in March-April",
+             source="calculation", result={**tab(t), "forecast": round(fc)}),
+        step("The 2017 ratio includes a market that grew in May-August 2017; in 2018 the market was flat", uses="q2.monthly_orders",
+             source="calculation", result={"market_orders_per_month_may_aug_over_mar_apr_2017": round(float(mkt17), 3),
+                                           "market_mar_apr_vs_jan_feb_2018": round(mkt, 3),
+                                           "forecast_without_market_growth": round(adj)}),
+        step("Compare with the recorded orders", sql=sql_a,
+             result={"actual": actual, "error_of_this_forecast": round(adj / actual - 1, 3)}),
+    ]
+    resp = (f"About {adj:,.0f} orders. The two cohorts had {int(t.orders_mar_apr_2018.sum()):,} orders in March-April 2018; "
+            f"the 2017 cohorts of the same months grew to {fc:,.0f} by that path, but part of their growth was the growth "
+            f"of the whole market (in May-August 2017 it had {(mkt17 - 1) * 100:.0f}% more orders a month than in "
+            f"March-April), which stopped in 2018, so the forecast removes it. (Recorded: {actual:,}.)")
+    return steps, {"value": actual}, resp
+
+
 # ====================================================================== Q7 Prescribe
 @task("q7.delivery_hubs", "Q7.2",
       "We want to open 3 regional delivery hubs, each in the largest municipality of a state. Using the orders of January to "
       "August 2018 by customer municipality, choose the 3 municipalities that minimize the average great-circle distance from "
       "a customer's municipality to its nearest hub.",
-      {"type": "json", "schema": {"hubs": "list[str]", "avg_km": "float"}}, depends_on=["q1.zip_prefix"],
+      {"type": "json", "schema": {"hubs": "list[str]", "avg_km": "float"}}, depends_on=["q1.zip_prefix", "q5.geolocation_jump", "q6.promise_whatif"],
       scoring={"metric": "optimality_gap", "field": "avg_km", "tol": 0.01})
 def delivery_hubs(e):
     sql1 = """SELECT m.municipality_code, m.name, m.uf, m.centroid_lat AS lat, m.centroid_lon AS lon, count(*) AS orders
@@ -1168,7 +2010,11 @@ WHERE population_2018 = (SELECT max(population_2018) FROM municipalities x WHERE
     share = {f"{hubs.iloc[k]['name']} ({hubs.iloc[k].uf})": round(float(w[assign == k].sum() / w.sum() * 100), 1) for k in range(3)}
     gold = {"hubs": [f"{r.name} ({r.uf})" for r in hubs.itertuples()], "avg_km": round(best[0], 1),
             "greedy_hubs": [f"{cand.iloc[j]['name']} ({cand.iloc[j].uf})" for j in greedy], "greedy_avg_km": round(gcost, 1)}
-    steps = [step("Customer ZIP prefixes give a municipality through one point per prefix", uses="q1.zip_prefix",
+    steps = [step("Single geolocation points can be thousands of kilometers off: use municipality centroids",
+                  uses="q5.geolocation_jump"),
+             step("Shorter promises make transport time count: late deliveries rise when the promise is cut",
+                  uses="q6.promise_whatif"),
+             step("Customer ZIP prefixes give a municipality through one point per prefix", uses="q1.zip_prefix",
                   result={"orders_jan_aug_2018": tot, "orders_located": int(w.sum())}),
              step("Orders by customer municipality", sql=sql1, result=tab(dem.round(3), limit=10)),
              step("Candidates: the most populous municipality of each state", sql=sql2, result=tab(cand.round(3))),
@@ -1187,7 +2033,7 @@ WHERE population_2018 = (SELECT max(population_2018) FROM municipalities x WHERE
 @task("q7.lead_channels", "Q7.1",
       "The marketing team recruits sellers through several channels. Which channels should get more budget and which less? "
       "Support the advice with the conversion of leads into sellers and the sales those sellers made.", TEXT,
-      depends_on=["q2.funnel_period"])
+      depends_on=["q2.funnel_period", "q5.seller_growth_2018", "q6.new_seller_orders"])
 def lead_channels(e):
     sql = """WITH s AS (SELECT i.seller_id, count(DISTINCT i.order_id) AS orders, sum(i.price) AS revenue FROM order_items i GROUP BY 1)
 SELECT coalesce(q.origin, '(missing)') AS origin, count(*) AS leads, count(c.mql_id) AS closed,
@@ -1203,6 +2049,8 @@ FROM leads_closed c JOIN leads_qualified q USING (mql_id) GROUP BY 1 ORDER BY 2 
     c = e.q(sql3).iloc[0]
     tot = a.sum()
     steps = [step("The funnel: leads, closed deals, sellers", uses="q2.funnel_period"),
+             step("Sellers recruited in 2017 made most of the growth of 2018", uses="q5.seller_growth_2018"),
+             step("A new seller's orders keep growing for months after the first sale", uses="q6.new_seller_orders"),
              step("Conversion and sales by channel", sql=sql, result=tab(a.reset_index())),
              step("Time to close by channel", sql=sql2, result=tab(e.q(sql2))),
              step("Most closed sellers have no sales yet in the order records", sql=sql3, result=tab(e.q(sql3)),
@@ -1225,6 +2073,97 @@ FROM leads_closed c JOIN leads_qualified q USING (mql_id) GROUP BY 1 ORDER BY 2 
             f"Cut or rework social ({a.loc['social'].conversion_pct}%), email ({a.loc['email'].conversion_pct}%) and display "
             f"({a.loc['display'].conversion_pct}%). The best-converting group is 'unknown' ({a.loc['unknown'].conversion_pct}%): fix "
             f"attribution first. Note that only {int(c.with_sales)} of {int(c.closed)} new sellers have sales yet in the records.")
+    return steps, gold, resp
+
+
+@task("q7.bad_reviews", "Q7.1",
+      "One- and two-star reviews hurt sellers and the marketplace. What should we do to reduce them? Support each "
+      "suggestion with numbers from the records.", TEXT,
+      depends_on=["q3.delay_and_reviews", "q4.category_reviews", "q6.on_time_reviews"])
+def bad_reviews(e):
+    sql = f"""WITH r AS (SELECT order_id, min(review_score) AS score FROM order_reviews GROUP BY 1),
+     n AS (SELECT order_id, count(*) AS items, count(DISTINCT seller_id) AS sellers FROM order_items GROUP BY 1)
+SELECT CASE WHEN o.order_status <> 'delivered' OR o.order_delivered_customer_date IS NULL THEN 'not delivered'
+            WHEN {LATE} THEN 'late' ELSE 'on time' END AS delivery,
+  CASE WHEN n.sellers > 1 THEN 'several sellers' WHEN n.items > 1 THEN 'one seller, several items' ELSE 'one item' END AS basket,
+  count(*) AS orders, round(avg((r.score <= 2)::INT) * 100, 1) AS pct_1_2_stars
+FROM orders o JOIN r USING (order_id) LEFT JOIN n USING (order_id) GROUP BY 1, 2 ORDER BY 1, 2"""
+    sql2 = f"""WITH r AS (SELECT order_id, min(review_score) AS score FROM order_reviews GROUP BY 1)
+SELECT CASE WHEN o.order_status <> 'delivered' OR o.order_delivered_customer_date IS NULL THEN 'not delivered'
+            WHEN {LATE} THEN 'late' ELSE 'on time' END AS delivery,
+  count(*) FILTER (WHERE r.score <= 2) AS bad_reviews
+FROM orders o JOIN r USING (order_id) GROUP BY 1 ORDER BY 2 DESC"""
+    a, b = e.q(sql), e.q(sql2).set_index("delivery").bad_reviews
+    sh = b / b.sum() * 100
+    late_share = float(a[a.delivery == "late"].orders.sum() / a.orders.sum() * 100)
+    one = a[a.basket == "one item"].set_index("delivery").pct_1_2_stars
+    ot = a[a.delivery == "on time"].set_index("basket").pct_1_2_stars
+    steps = [
+        step("Lateness drives low scores", uses="q3.delay_and_reviews"),
+        step("Share of 1-2 star reviews by delivery outcome and basket", sql=sql, result=tab(a)),
+        step("Where the 1-2 star reviews come from", sql=sql2, result=tab(b.reset_index())),
+        step("Some categories score low beyond lateness", uses="q4.category_reviews"),
+        step("What on-time delivery would have done to the average score", uses="q6.on_time_reviews"),
+    ]
+    gold = {"key_facts": [
+        f"Cut lateness: {one['late']:.0f}% of late one-item orders get 1-2 stars against {one['on time']:.0f}% on "
+        f"time; late orders are {late_share:.0f}% of reviewed orders but bring {sh['late']:.0f}% of the 1-2 star reviews.",
+        f"Lateness is not the only lever: {sh['on time']:.0f}% of the 1-2 star reviews are on orders delivered on time.",
+        f"Prevent orders that never arrive: {one['not delivered']:.0f}% of them get 1-2 stars, and they bring "
+        f"{sh['not delivered']:.0f}% of the bad reviews; cancel and refund them quickly with a message.",
+        f"Watch orders split across several sellers: even when on time, {ot['several sellers']:.0f}% get 1-2 stars "
+        f"against {ot['one item']:.0f}% for one item (parts arrive separately).",
+        "Work with the categories that score low beyond lateness on product descriptions and quality."],
+        "required": [0, 1, 2, 3]}
+    return steps, gold, " ".join(gold["key_facts"])
+
+
+@task("q7.seller_program", "Q7.2",
+      "We want to invite 10 sellers to a premium program. Choose them among the sellers with at least 100 delivered "
+      "orders in 2018 to maximize their total 2018 revenue (item prices), with at most 4 sellers from the same state, at "
+      "least 3 sellers outside São Paulo state, and a combined late-delivery rate of the chosen sellers (late orders over "
+      "delivered orders, all of them together) of at most 6%.",
+      {"type": "json", "schema": {"seller_ids": "list[str]", "revenue": "float"}},
+      depends_on=["q4.open_sellers", "q5.seller_growth_2018", "q6.on_time_reviews"], scoring={"metric": "optimality_gap", "field": "revenue", "tol": 0.01})
+def seller_program(e):
+    from scipy.optimize import Bounds, LinearConstraint, milp
+    sql = f"""WITH so AS (SELECT i.seller_id, o.order_id, any_value({LATE}) AS late, sum(i.price) AS revenue
+            FROM orders o JOIN order_items i USING (order_id)
+            WHERE o.{DELIVERED} AND o.order_purchase_timestamp >= '2018-01-01' GROUP BY 1, 2)
+SELECT so.seller_id, s.seller_state, count(*) AS delivered, sum(late::INT) AS late, round(sum(revenue), 2) AS revenue
+FROM so JOIN sellers s USING (seller_id) GROUP BY 1, 2 HAVING count(*) >= 100 ORDER BY revenue DESC"""
+    a = e.q(sql)
+    a["late_pct"] = (a.late / a.delivered * 100).round(1)
+    n = len(a)
+    cons = [LinearConstraint(np.ones((1, n)), 10, 10),
+            LinearConstraint((a.seller_state != "SP").astype(float).values[None, :], 3, np.inf),
+            LinearConstraint((a.late - 0.06 * a.delivered).values[None, :], -np.inf, 0)]
+    for st_ in a.seller_state.unique():
+        cons.append(LinearConstraint((a.seller_state == st_).astype(float).values[None, :], 0, 4))
+    res = milp(-a.revenue.values, constraints=cons, integrality=np.ones(n), bounds=Bounds(0, 1))
+    pick = a[res.x > 0.5]
+    top10 = a.head(10)
+    gold = {"seller_ids": sorted(pick.seller_id), "revenue": round(float(pick.revenue.sum()), 2),
+            "late_pct": round(float(pick.late.sum() / pick.delivered.sum() * 100), 2)}
+    steps = [
+        step("Few sellers make most revenue, and late rates differ", uses="q4.open_sellers"),
+        step("The sellers of 2017 now carry the marketplace's growth", uses="q5.seller_growth_2018"),
+        step("Late deliveries cost review score: on-time delivery would raise the average", uses="q6.on_time_reviews"),
+        step("Candidates: sellers with 100 or more delivered orders in 2018, with revenue and late orders", sql=sql,
+             result=tab(a, limit=25)),
+        step("The 10 largest by revenue break the rules", source="calculation",
+             result={"revenue": round(float(top10.revenue.sum()), 2),
+                     "late_pct": round(float(top10.late.sum() / top10.delivered.sum() * 100), 2),
+                     "sp_sellers": int((top10.seller_state == "SP").sum())}),
+        step("Choose with a 0-1 integer program (state limits, three outside São Paulo, combined late rate)",
+             source="calculation", result=tab(pick[["seller_id", "seller_state", "delivered", "late_pct", "revenue"]])),
+    ]
+    resp = (f"Invite these {len(pick)} sellers: {', '.join(s[:8] for s in pick.seller_id)}… (full ids in the result), with "
+            f"R$ {gold['revenue']:,.2f} of 2018 revenue and a combined late rate of {gold['late_pct']:.1f}%. They come from "
+            + ", ".join(f"{k} ({v})" for k, v in pick.seller_state.value_counts().items())
+            + f". Simply taking the 10 largest would give R$ {top10.revenue.sum():,.2f} but with "
+            f"{int((top10.seller_state == 'SP').sum())} sellers from São Paulo and a late rate of "
+            f"{top10.late.sum() / top10.delivered.sum() * 100:.1f}%.")
     return steps, gold, resp
 
 

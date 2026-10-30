@@ -4,7 +4,7 @@
 # Every table comes from a public source or from Spider 2.0 (build.py, SOURCES); see sources/br_ecommerce/README.md.
 source:
   raw: sources/br_ecommerce/raw
-  sqlite: sources/br_ecommerce/raw/E_commerce.sqlite        # extracted from the Spider 2.0-lite local database archive
+  sqlite: sources/br_ecommerce/raw/E_commerce.sqlite        # extracted from the Spider 2.0 local database archive (Hugging Face)
   spider_gold: third_party/spider2/spider2-lite/evaluation_suite/gold     # relative to the repository root
   spider_docs: third_party/spider2/spider2-lite/resource/documents
 holiday_years: [2016, 2017, 2018]

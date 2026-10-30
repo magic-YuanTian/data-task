@@ -23,8 +23,10 @@ on this copy reproduce the Spider gold answers. Details and URLs are in [sources
 | `holidays` | U.S. federal holiday calendar | none | none | generated |
 
 Source documents quoted by the tasks: the publisher's system data page (field definitions and processing,
-https://citibikenyc.com/system-data) and the NOAA GHCN-Daily readme
-(https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt).
+https://citibikenyc.com/system-data), the NOAA GHCN-Daily readme
+(https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt), the NOAA Global Summary of the Day readme
+(https://www.ncei.noaa.gov/data/global-summary-of-the-day/doc/readme.txt) and the Wikipedia article on the 2017
+Women's March. Copies of the two readmes and of the article extract are in `sources/nyc/raw`.
 
 Spider 2.0 gold results used by two of these tasks are in `third_party/spider2` (MIT license).
 
@@ -59,5 +61,6 @@ Black Friday. Six tasks are Spider 2.0-lite tasks (local004, local028, local029,
 checked against the Spider gold results in `third_party/spider2`.
 
 The Kaggle datasets are under CC BY-NC-SA 4.0 (attribution, non-commercial use, share alike). This repository does
-not include the records; `scripts/fetch_sources.py` downloads them from the Spider 2.0-lite archive.
+not include the records; `scripts/fetch_sources.py` downloads them from the Spider 2.0 local
+database archive that the Spider 2.0 authors publish on Hugging Face (`xlangai/spider2-localdb`).
 

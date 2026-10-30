@@ -10,6 +10,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from . import spectrum
 from .db import ordered
 from .levels import LEVEL_NAMES, TASK_TYPES
 
@@ -57,7 +58,7 @@ def tab(df: pd.DataFrame, digits=4, limit=None) -> dict:
 
 
 def step(title, *, sql=None, doc=None, result=None, note=None, uses=None, source=None):
-    src = source or ("sub-task" if uses else "db" if sql else "document" if doc else "calculation")
+    src = source or ("db" if sql else "document" if doc else "sub-task" if uses else "calculation")
     return {k: v for k, v in dict(title=title, source=src, sql=sql.strip() if sql else None,
                                   doc=doc, result=result, note=note, uses=uses).items() if v is not None}
 
@@ -126,5 +127,6 @@ class TaskSet:
             x["used_by"] = [y["id"] for y in out if x["id"] in y["depends_on"]]
             for s in x["steps"]:
                 assert s.get("uses") is None or s["uses"] in x["depends_on"], (x["id"], s["uses"])
+        spectrum.check(out)
         out_file.write_text(json.dumps(out, indent=1, ensure_ascii=False, default=str) + "\n")
         return out

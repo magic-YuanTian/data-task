@@ -12,7 +12,7 @@ the publisher changed the file; the build would then differ from the published o
 |---|---|---|---|
 | nyc_bikeshare | tl_2019_us_zcta510.zip | U.S. Census TIGER/Line 2019 ZIP Code Tabulation Areas | 534 MB |
 | nyc_bikeshare | {2013..2018}-citibike-tripdata.zip | NYC bike share trip histories (Lyft Bikes and Scooters, LLC) | 3.2 GB |
-| br_ecommerce | E_commerce.sqlite | Spider 2.0-lite local databases (archive of 457 MB; only this file is kept) | 113 MB |
+| br_ecommerce | E_commerce.sqlite | Spider 2.0 local databases on Hugging Face (archive of 573 MB; only this file is kept) | 113 MB |
 | br_ecommerce | br_municipios.zip, br_unidades_da_federacao.zip | IBGE 2018 municipal and state meshes | 137 MB |
 | br_ecommerce | base_de_dados_2010_2017_txt.zip | IBGE municipal GDP 2010-2017 | 5 MB |
 
@@ -56,10 +56,11 @@ TRIP_ZIPS = {
     2018: "91f39eda364531181bb2b983afb69e6875106e5032c6d8418cee647115e386d7",
 }
 TRIP_URL = "https://s3.amazonaws.com/tripdata/{y}-citibike-tripdata.zip"
-# Spider 2.0-lite distributes its local SQLite databases as one archive (README of spider2-lite, "local database")
-SPIDER_ZIP = (BR / "spider2_local_sqlite.zip",
-              "https://drive.usercontent.google.com/download?id=1coEVsCZq-Xvj9p2TnhBFoFTsY-UoYGmG&export=download&confirm=t",
-              "d56acf7c9d89be4bdf1f4f1281f4a03d91735f1858f6d6d0cfe0f9d562e3a94f")
+# the Spider 2.0 authors (xlangai) publish its local SQLite databases as one archive on Hugging Face; its
+# E_commerce.sqlite is byte-identical to the one in the archive linked from the spider2-lite README
+SPIDER_ZIP = (BR / "spider2_localdb_sqlite.zip",
+              "https://huggingface.co/datasets/xlangai/spider2-localdb/resolve/main/sqlite.zip",
+              "d97fc0f3f6bc3f1a83548ad2b32c646bfc67433c23a0c499d3450796196b2776")
 SPIDER_DB = (BR / "E_commerce.sqlite", "49446afd935721ee12fc95316fbee9666a3e1bd4872dfa194fe4625d6762a81a")
 
 

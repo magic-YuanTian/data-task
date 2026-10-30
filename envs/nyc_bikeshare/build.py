@@ -60,7 +60,31 @@ DOCUMENTS = {
                             "or users trying to re-dock a bike to ensure it's secure)."]),
     "ghcn": dict(document="NOAA GHCN-Daily readme", url="https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt",
                  text=["PRCP = Precipitation (tenths of mm)", "SNOW = Snowfall (mm)", "SNWD = Snow depth (mm)",
-                       "TMAX = Maximum temperature (tenths of degrees C)", "TMIN = Minimum temperature (tenths of degrees C)"]),
+                       "TMAX = Maximum temperature (tenths of degrees C)", "TMIN = Minimum temperature (tenths of degrees C)",
+                       "MFLAG1 is the measurement flag for the first day of the month.",
+                       "T = trace of precipitation, snowfall, or snow depth",
+                       "WT** = Weather Type where ** has one of the following values: 01 = Fog, ice fog, or freezing fog "
+                       "(may include heavy fog); 02 = Heavy fog or heaving freezing fog (not always distinquished from fog); "
+                       "03 = Thunder; 08 = Smoke or haze",
+                       "AWND = Average daily wind speed (tenths of meters per second)"]),
+    "gsod": dict(document="NOAA Global Summary of the Day readme",
+                 url="https://www.ncei.noaa.gov/data/global-summary-of-the-day/doc/readme.txt",
+                 text=["The data are reported and summarized based on Greenwich Mean Time (GMT, 0000Z - 2359Z) since the "
+                       "original synoptic/hourly data are reported and based on GMT.",
+                       "PRCP - Total precipitation (rain and/or melted snow) reported during the day in inches and "
+                       "hundredths; will usually not end with the midnight observation (i.e. may include latter part of "
+                       "previous day). '0' indicates no measurable precipitation (includes a trace). Missing = 99.99",
+                       "TEMP - Mean temperature for the day in degrees Fahrenheit to tenths. Missing = 9999.9",
+                       "GUST - Maximum wind gust reported for the day in knots to tenths.  Missing = 999.9",
+                       "SNDP - Snow depth in inches to tenths. It is the last report for the day if reported more than "
+                       "once. Missing = 999.9",
+                       "Note: Most stations do not report '0' on days with no snow on the ground, therefore, '999.9' will "
+                       "often appear on these days."]),
+    "womens_march": dict(document="Wikipedia, 2017 Women's March", url="https://en.wikipedia.org/wiki/2017_Women%27s_March",
+                         text=["The Women's March was an American protest on January 21, 2017, the day after the first "
+                               "inauguration of Donald Trump as the president of the United States.",
+                               "The crowds were peaceful: no arrests were made in D.C., Chicago, Los Angeles, New York City, "
+                               "or Seattle, where a combined total of about two million people marched."]),
 }
 
 

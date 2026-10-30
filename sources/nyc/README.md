@@ -7,7 +7,7 @@ trips are normalized by `envs/nyc_bikeshare/ingest.py`. The daily taxi pickups i
 
 | Kept here | Downloaded by the scripts |
 |---|---|
-| `raw/ghcnd_*.csv` (2013-2018 rows of the three station files), `raw/gsod_*.csv`, `raw/taxi_zones.zip`, `raw/taxi_zone_lookup.csv`, `raw/nyc_zip_neighborhoods*.csv`, `raw/gbfs_station_information_2026.json` (name, position and dock count of each station), `taxi/*.parquet` | `raw/{2013..2018}-citibike-tripdata.zip` (converted to `trips/` and then deleted), `raw/tl_2019_us_zcta510.zip` |
+| `raw/ghcnd_*.csv` (2013-2018 rows of the three station files), `raw/gsod_*.csv`, `raw/taxi_zones.zip`, `raw/taxi_zone_lookup.csv`, `raw/nyc_zip_neighborhoods*.csv`, `raw/gbfs_station_information_2026.json` (name, position and dock count of each station), `raw/ghcnd_readme.txt`, `raw/gsod_readme.txt`, `raw/wikipedia_2017_womens_march.json`, `taxi/*.parquet` | `raw/{2013..2018}-citibike-tripdata.zip` (converted to `trips/` and then deleted), `raw/tl_2019_us_zcta510.zip` |
 
 | File | Source | Use | License or terms |
 |---|---|---|---|
@@ -20,6 +20,8 @@ trips are normalized by `envs/nyc_bikeshare/ingest.py`. The daily taxi pickups i
 | `raw/nyc_zip_neighborhoods.csv` | NYS Department of Health ZIP code definitions of NYC neighborhoods (42 UHF neighborhoods); the page is offline, so the table was reconstructed | neighborhoods | public information |
 | `raw/nyc_zip_neighborhoods_spider.csv` | the table above plus seven ZIP codes inferred from the Spider 2.0 gold of `sf_bq050` (10282 Tribeca; 10199, 10103, 10110 Chelsea and Clinton; 10167, 10168 Gramercy Park and Murray Hill; 10278 Lower Manhattan) | `zip_neighborhoods` | - |
 | `raw/gbfs_station_information_2026.json` | public station feed, `https://gbfs.citibikenyc.com/gbfs/en/station_information.json` (fetched October 2026) | dock counts, matched to 2013-2018 stations by name and position (a stand-in: the 2018 counts are not public); only name, position and dock count are kept | Lyft data license, as for the trips |
+| `raw/ghcnd_readme.txt`, `raw/gsod_readme.txt` | NOAA documentation, `https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt` and `https://www.ncei.noaa.gov/data/global-summary-of-the-day/doc/readme.txt` (fetched October 2026) | passages quoted by the tasks (units, flags, missing values, the GMT day of GSOD) | public domain |
+| `raw/wikipedia_2017_womens_march.json` | Wikipedia API extract of the article 2017 Women's March (fetched October 2026) | passages quoted by the task q4.january_2017 | CC BY-SA 4.0 |
 
 ## Checks against Spider 2.0
 
